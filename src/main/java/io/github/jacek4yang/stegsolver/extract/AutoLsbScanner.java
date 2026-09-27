@@ -399,7 +399,6 @@ public final class AutoLsbScanner {
     }
 
     private static Evaluation evaluateText(byte[] data, boolean ascii) {
-        int words = 0;
         int spaces = 0;
         int printable = 0;
         for (byte b : data) {
