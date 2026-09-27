@@ -18,11 +18,15 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 /**
@@ -73,12 +77,19 @@ public final class FrameBrowserPane implements ToolPane {
                 showFrame(index);
             }
         });
+        previousButton.setMinWidth(Region.USE_PREF_SIZE);
         previousButton.setOnAction(event -> showFrame(currentFrame - 1));
+        nextButton.setMinWidth(Region.USE_PREF_SIZE);
         nextButton.setOnAction(event -> showFrame(currentFrame + 1));
+        saveButton.setMinWidth(Region.USE_PREF_SIZE);
         saveButton.setOnAction(event -> saveFrame());
+        openAsDocumentButton.setMinWidth(Region.USE_PREF_SIZE);
         openAsDocumentButton.setOnAction(event -> openFrameAsDocument());
+        loadButton.setMinWidth(Region.USE_PREF_SIZE);
         loadButton.setOnAction(event -> chooseFileToLoad());
+        useDocumentButton.setMinWidth(Region.USE_PREF_SIZE);
         useDocumentButton.setOnAction(event -> loadFromDocument());
+        frameSpinner.setMinWidth(Region.USE_PREF_SIZE);
         frameSpinner.valueProperty().addListener((observable, old, value) -> {
             if (value != null && value - 1 != currentFrame) {
                 showFrame(value - 1);
@@ -101,7 +112,7 @@ public final class FrameBrowserPane implements ToolPane {
         status.setWrapText(true);
         status.getStyleClass().addAll("mono", "steg-transform-label");
 
-        HBox sourceButtons = new HBox(6, useDocumentButton, loadButton);
+        FlowPane sourceButtons = new FlowPane(6, 6, useDocumentButton, loadButton);
         sourceButtons.setAlignment(Pos.CENTER_LEFT);
 
         VBox sourceCard = new VBox(8,
@@ -113,7 +124,7 @@ public final class FrameBrowserPane implements ToolPane {
         HBox navigation = new HBox(6, previousButton, frameSpinner, nextButton);
         navigation.setAlignment(Pos.CENTER_LEFT);
 
-        HBox frameActions = new HBox(6, saveButton, openAsDocumentButton);
+        FlowPane frameActions = new FlowPane(6, 6, saveButton, openAsDocumentButton);
         frameActions.setAlignment(Pos.CENTER_LEFT);
 
         VBox navCard = new VBox(8,
@@ -126,7 +137,13 @@ public final class FrameBrowserPane implements ToolPane {
 
         VBox box = new VBox(10, sourceCard, navCard);
         box.setPadding(new Insets(10));
-        return box;
+
+        ScrollPane scroll = new ScrollPane(box);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setPadding(new Insets(0));
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        return scroll;
     }
 
     @Override
@@ -293,7 +310,7 @@ public final class FrameBrowserPane implements ToolPane {
         openAsDocumentButton.setDisable(!loaded);
         frameSpinner.setDisable(!loaded);
         thumbnails.setDisable(!loaded);
-        useDocumentButton.setDisable(!window.document().isOpen());
+        useDocumentButton.setDisable(window == null || !window.document().isOpen());
     }
 
     /** A virtualised thumbnail cell that decodes its frame in the background and caches it. */

@@ -42,7 +42,7 @@ class SelfTestTest {
         SelfTest.Report report = SelfTest.run(SyntheticImage.create(), null);
         assertTrue(report.ok(), report::toText);
         assertTrue(report.toText().contains("barcode scan"), report.toText());
-        assertEquals(6, report.steps().size(), report::toText);
+        assertEquals(7, report.steps().size(), report::toText);
         // The stereogram solver should find the period of the generated pattern.
         assertTrue(report.steps().stream().anyMatch(step -> step.name().equals("stereogram solver")
                         && step.detail().contains("suggested offset " + SyntheticImage.PATTERN_PERIOD)),

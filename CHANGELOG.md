@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 — 2026-09-28
+
+- Adds bounded Auto LSB Fast and Deep scans with ranked payload candidates.
+- Applies a candidate's extraction settings directly to the manual Extract tool and saves the complete binary payload on request.
+- Makes tool panes scroll and wrap so important JavaFX control text remains visible.
+- Improves scan cancellation, stale-result handling, and candidate deduplication.
+
 ## 1.0.0 ? 2026-09-27
 
 First modern release, following the repository's 1.0.0-SNAPSHOT development version.

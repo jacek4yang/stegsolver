@@ -214,8 +214,8 @@ public final class MainWindow implements PreviewHost {
 
         toolDock.getStyleClass().add("steg-tool-dock");
         toolDock.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        toolDock.setMinWidth(320);
-        toolDock.setPrefWidth(420);
+        toolDock.setMinWidth(380);
+        toolDock.setPrefWidth(440);
         for (ToolPane pane : panes) {
             Tab tab = new Tab(pane.title(), pane.content());
             tab.setClosable(false);
@@ -363,25 +363,32 @@ public final class MainWindow implements PreviewHost {
 
     private void buildToolbar() {
         Button openButton = new Button("Open");
+        openButton.setMinWidth(Region.USE_PREF_SIZE);
         openButton.setTooltip(new Tooltip("Open an image file (Ctrl+O)"));
         openButton.setOnAction(event -> openImage());
 
         Button saveButton = new Button("Save");
+        saveButton.setMinWidth(Region.USE_PREF_SIZE);
         saveButton.setTooltip(new Tooltip("Save the displayed image (Ctrl+S)"));
         saveButton.setOnAction(event -> saveDisplayedImage());
 
         previousButton.getStyleClass().add("steg-nav-btn");
+        previousButton.setMinWidth(Region.USE_PREF_SIZE);
         previousButton.setTooltip(new Tooltip("Previous transform plane (Left arrow)"));
         previousButton.setOnAction(event -> previousTransform());
 
         nextButton.getStyleClass().add("steg-nav-btn");
+        nextButton.setMinWidth(Region.USE_PREF_SIZE);
         nextButton.setTooltip(new Tooltip("Next transform plane (Right arrow)"));
         nextButton.setOnAction(event -> nextTransform());
 
         transformStepBadge.getStyleClass().add("steg-step-badge");
+        transformStepBadge.setMinWidth(Region.USE_PREF_SIZE);
 
         transformChoice.getItems().setAll(TransformCatalog.definitions());
+        transformChoice.setMinWidth(180);
         transformChoice.setPrefWidth(260);
+        transformChoice.setMaxWidth(380);
         transformChoice.getStyleClass().add("steg-transform-combo");
         transformChoice.setTooltip(new Tooltip("Current transform; up/down arrow keys step within a group"));
         transformChoice.setCellFactory(lv -> new ListCell<>() {
@@ -390,8 +397,11 @@ public final class MainWindow implements PreviewHost {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
                     setText(null);
+                    setTooltip(null);
                 } else {
-                    setText(String.format("[%02d/42] %s", item.index() + 1, item.label()));
+                    String text = String.format("[%02d/42] %s", item.index() + 1, item.label());
+                    setText(text);
+                    setTooltip(new Tooltip(text));
                 }
             }
         });
@@ -401,8 +411,11 @@ public final class MainWindow implements PreviewHost {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
                     setText("No image");
+                    setTooltip(null);
                 } else {
-                    setText(String.format("[%02d/42] %s", item.index() + 1, item.label()));
+                    String text = String.format("[%02d/42] %s", item.index() + 1, item.label());
+                    setText(text);
+                    setTooltip(new Tooltip(text));
                 }
             }
         });
@@ -414,21 +427,26 @@ public final class MainWindow implements PreviewHost {
         });
 
         Button restoreButton = new Button("Fit");
+        restoreButton.setMinWidth(Region.USE_PREF_SIZE);
         restoreButton.setTooltip(new Tooltip("Fit image to window (Ctrl+0)"));
         restoreButton.setOnAction(event -> viewport.fitToWindow());
 
         Button actualButton = new Button("1:1");
+        actualButton.setMinWidth(Region.USE_PREF_SIZE);
         actualButton.setTooltip(new Tooltip("Actual pixel size 100% (Ctrl+1)"));
         actualButton.setOnAction(event -> viewport.actualSize());
 
         Button zoomOutButton = new Button("\u2212");
+        zoomOutButton.setMinWidth(Region.USE_PREF_SIZE);
         zoomOutButton.setTooltip(new Tooltip("Zoom out (Ctrl+Minus)"));
         zoomOutButton.setOnAction(e -> viewport.zoomBy(0.8));
 
         Button zoomInButton = new Button("+");
+        zoomInButton.setMinWidth(Region.USE_PREF_SIZE);
         zoomInButton.setTooltip(new Tooltip("Zoom in (Ctrl+Plus)"));
         zoomInButton.setOnAction(e -> viewport.zoomBy(1.25));
 
+        zoomSlider.setMinWidth(80);
         zoomSlider.setPrefWidth(120);
         zoomSlider.setBlockIncrement(10);
         zoomSlider.valueProperty().addListener((observable, old, value) -> {
@@ -438,6 +456,7 @@ public final class MainWindow implements PreviewHost {
             }
         });
 
+        selectionToggle.setMinWidth(Region.USE_PREF_SIZE);
         selectionToggle.setTooltip(new Tooltip("Drag inside image to select a region (Esc to clear, Shift for square)"));
         selectionToggle.setOnAction(event -> {
             viewport.setSelectionMode(selectionToggle.isSelected());
@@ -445,16 +464,19 @@ public final class MainWindow implements PreviewHost {
         });
 
         backToDocumentButton.setText("\u21B6 Return to Document");
+        backToDocumentButton.setMinWidth(Region.USE_PREF_SIZE);
         backToDocumentButton.getStyleClass().addAll("steg-badge", "steg-badge-warning");
         backToDocumentButton.setVisible(false);
         backToDocumentButton.setManaged(false);
         backToDocumentButton.setOnAction(event -> showDocument());
 
         dockToggle.setSelected(true);
+        dockToggle.setMinWidth(Region.USE_PREF_SIZE);
         dockToggle.setTooltip(new Tooltip("Toggle tools dock visibility (Ctrl+T)"));
         dockToggle.setOnAction(event -> toggleDock());
 
         Button themeButton = new Button("Theme \u25D0");
+        themeButton.setMinWidth(Region.USE_PREF_SIZE);
         themeButton.setTooltip(new Tooltip("Toggle theme between Dark and Light"));
         themeButton.setOnAction(event -> {
             if (themeManager != null) {
@@ -474,21 +496,26 @@ public final class MainWindow implements PreviewHost {
 
     private void buildStatusBar() {
         transformLabel.getStyleClass().add("steg-transform-label");
+        transformLabel.setWrapText(false);
         transformPill.getChildren().setAll(transformLabel);
         transformPill.getStyleClass().add("steg-status-pill");
         transformPill.setAlignment(Pos.CENTER_LEFT);
+        transformPill.setMinWidth(Region.USE_PREF_SIZE);
 
         viewBadge.getStyleClass().addAll("steg-badge", "steg-badge-warning");
+        viewBadge.setMinWidth(Region.USE_PREF_SIZE);
         viewBadge.setVisible(false);
         viewBadge.setManaged(false);
 
         docInfoPill.getChildren().setAll(sizeLabel);
         docInfoPill.getStyleClass().add("steg-status-pill");
         docInfoPill.setAlignment(Pos.CENTER_LEFT);
+        docInfoPill.setMinWidth(Region.USE_PREF_SIZE);
 
         zoomPill.getChildren().setAll(zoomLabel);
         zoomPill.getStyleClass().add("steg-status-pill");
         zoomPill.setAlignment(Pos.CENTER_LEFT);
+        zoomPill.setMinWidth(Region.USE_PREF_SIZE);
         zoomPill.setCursor(javafx.scene.Cursor.HAND);
         Tooltip.install(zoomPill, new Tooltip("Click to toggle Fit / 100%"));
         zoomPill.setOnMouseClicked(event -> {
@@ -502,11 +529,14 @@ public final class MainWindow implements PreviewHost {
         });
 
         selectionBadge.getStyleClass().addAll("steg-status-pill", "mono");
+        selectionBadge.setMinWidth(Region.USE_PREF_SIZE);
         selectionBadge.setVisible(false);
         selectionBadge.setManaged(false);
 
         warningBadge.getStyleClass().addAll("steg-badge", "steg-badge-warning");
+        warningBadge.setMinWidth(Region.USE_PREF_SIZE);
         barcodeBadge.getStyleClass().addAll("steg-badge", "steg-badge-payload");
+        barcodeBadge.setMinWidth(Region.USE_PREF_SIZE);
         for (Label badge : List.of(warningBadge, barcodeBadge)) {
             badge.setVisible(false);
             badge.setManaged(false);
@@ -519,10 +549,13 @@ public final class MainWindow implements PreviewHost {
         pixelLabel.getStyleClass().add("mono");
         channelLabel.getStyleClass().add("mono");
         messageLabel.getStyleClass().add("steg-hint");
+        messageLabel.textProperty().addListener((obs, old, text) ->
+                messageLabel.setTooltip(text != null && !text.isBlank() ? new Tooltip(text) : null));
 
         pixelInspectorPill.getChildren().setAll(colorSwatch, pixelLabel, channelLabel);
         pixelInspectorPill.getStyleClass().add("steg-status-pill");
         pixelInspectorPill.setAlignment(Pos.CENTER_LEFT);
+        pixelInspectorPill.setMinWidth(Region.USE_PREF_SIZE);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);

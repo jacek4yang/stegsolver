@@ -14,8 +14,11 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 /**
@@ -56,13 +59,16 @@ public final class AnalysisPane implements ToolPane {
     @Override
     public Node content() {
         Button analyseButton = new Button("Analyse File");
+        analyseButton.setMinWidth(Region.USE_PREF_SIZE);
         analyseButton.setOnAction(event -> analyse());
         Button copyButton = new Button("Copy Report");
+        copyButton.setMinWidth(Region.USE_PREF_SIZE);
         copyButton.setOnAction(event -> FxUtils.copyText(reportArea.getText()));
         Button saveButton = new Button("Save Report...");
+        saveButton.setMinWidth(Region.USE_PREF_SIZE);
         saveButton.setOnAction(event -> saveReport());
 
-        HBox buttons = new HBox(8, analyseButton, copyButton, saveButton);
+        FlowPane buttons = new FlowPane(8, 6, analyseButton, copyButton, saveButton);
         buttons.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         Label header = new Label("Container File Structure");
@@ -81,7 +87,13 @@ public final class AnalysisPane implements ToolPane {
 
         VBox box = new VBox(10, topCard, reportCard);
         box.setPadding(new Insets(10));
-        return box;
+
+        ScrollPane scroll = new ScrollPane(box);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setPadding(new Insets(0));
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        return scroll;
     }
 
     @Override

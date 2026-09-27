@@ -39,6 +39,10 @@ barcode scanner and the file analyser all work on flat `int[]` arrays with no pe
 allocation and no AWT/Swing dependency. `ImageData` is only converted to a `BufferedImage` when an
 image is written with ImageIO (which is the only image codec available in the JDK).
 
+Auto LSB Scan uses the same `DataExtractor` as manual Extract. It ranks bounded 64 KiB prefixes,
+retains distinct configurations when a prefix is incomplete, and extracts the full payload only
+when the user chooses Save Payload.
+
 ## Threading
 
 * Everything that touches the scene graph runs on the JavaFX Application Thread.

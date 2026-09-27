@@ -32,6 +32,8 @@ walkthroughs still apply.
   never opened, extracted or executed.
 * **Data extraction** with the original mask, traversal, bit order and channel order options, plus
   bit inversion and a bounded preview that cannot flood the UI.
+* **Auto LSB Scan** with bounded Fast and Deep searches, ranked payload candidates, exact Apply Settings,
+  and an explicit full-payload save action.
 * **Structural file analysis** for PNG, JPEG, GIF and BMP with strict bounds checking: chunk lists,
   CRCs, palettes, comments, JPEG segments and, most importantly, data appended after the end of the
   image.

@@ -118,6 +118,14 @@ public final class SelfTest {
                     + "), all planes would be " + allPlanes + " bytes";
         }));
 
+        steps.add(measure("auto LSB scan", () -> {
+            var options = io.github.jacek4yang.stegsolver.extract.AutoLsbScanner.fastScanOptions(image.hasAlpha());
+            var candidate = io.github.jacek4yang.stegsolver.extract.AutoLsbScanner.evaluateCandidate(image,
+                    io.github.jacek4yang.stegsolver.core.Roi.whole(image.width(), image.height()), options.get(0), 1024);
+            return options.size() + " fast scan configurations, sample candidate score "
+                    + candidate.score() + " (" + candidate.formattedConfig() + ")";
+        }));
+
         steps.add(measure("stereogram solver", () -> {
             int offset = Math.min(37, Math.max(1, image.width() / 3));
             int[] solved = StereoTransform.shiftedXor(image, offset);
