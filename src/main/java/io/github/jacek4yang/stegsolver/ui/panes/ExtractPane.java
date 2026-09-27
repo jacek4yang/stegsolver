@@ -91,7 +91,11 @@ public final class ExtractPane implements ToolPane {
         previewButton.setOnAction(event -> extract());
         saveBinaryButton.setOnAction(event -> saveBinary());
         saveTextButton.setOnAction(event -> saveText());
-        copyHexButton.setOnAction(event -> FxUtils.copyHex(extracted, 32));
+        copyHexButton.setOnAction(event -> {
+            int copied = FxUtils.copyHex(extracted, 32);
+            window.status("Copied hex for " + copied + " of " + extracted.length + " bytes"
+                    + (copied < extracted.length ? "; use Save binary or Save text for the complete extraction" : ""));
+        });
         // The controls have to exist before the default selection can be applied, so the grids are built
         // here and only assembled into the panel by content().
         planesGrid = buildPlanesGrid();

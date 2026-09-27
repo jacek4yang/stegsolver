@@ -718,8 +718,9 @@ public final class BarcodePane implements ToolPane {
             window.status("No bytes in the selected representation; choose Decoder raw bytes explicitly if needed");
             return;
         }
-        FxUtils.copyHex(data, 32);
-        window.status("Copied " + data.length + " bytes as hex to the clipboard");
+        int copied = FxUtils.copyHex(data, 32);
+        window.status("Copied " + copied + " of " + data.length + " bytes as hex"
+                + (copied < data.length ? "; save the payload for all bytes" : ""));
     }
 
     @Override

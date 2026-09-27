@@ -148,6 +148,11 @@ public final class FxIntegrationCheck {
             ImageData screen = ScreenGrabber.capture(capture);
             ScanResult result = new BarcodeScanner().scan(screen, ScanOptions.defaults());
             check(result.hits().stream().anyMatch(hit -> "screen workflow regression".equals(hit.text())), "screen QR decoded");
+            fx(() -> {
+                check(FxUtils.copyHex(new byte[70_000], 32) == 65_536, "clipboard export bounded");
+                check(!javafx.scene.input.Clipboard.getSystemClipboard().getString().contains("more bytes"), "clipboard contains only hex");
+                return null;
+            });
             System.out.println("FX integration: open, transform, cached stale result, same-size replacement, preview, all 13 combine modes, GIF navigation, append across documents, screen QR PASS");
         } finally {
             fx(() -> { if (window != null) window.shutdown(); if (stage != null) stage.close(); return null; });

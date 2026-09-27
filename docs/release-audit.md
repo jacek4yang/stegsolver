@@ -57,7 +57,8 @@ Payload saving never substitutes text encoding or decoder raw codewords for BYTE
   (about 33.5 million pixels with the packaged 2 GiB heap). Decode needs transient buffers.
   ImageIO's frame counter may scan headers before the first preview, but pixels are decoded lazily.
 - Frame cache: at most six frames and `min(128 MiB, heap / 16)`; thumbnails: 64 entries.
-  Reports retain 10,000 entries and bound text fields. These limits are deliberate.
+  Reports retain 10,000 entries and bound text fields. Clipboard hex is limited to 64 KiB
+  with an explicit count; file exports remain complete. These limits are deliberate.
 - Scan deadlines and cancellation are checked between ZXing passes; an individual decoder or
   ImageIO call is not forcibly terminated. Full scans of difficult large images may exceed the
   nominal budget; use an ROI.
