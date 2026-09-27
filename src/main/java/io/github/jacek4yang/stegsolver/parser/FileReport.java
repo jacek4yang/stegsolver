@@ -24,6 +24,17 @@ public final class FileReport {
     private final List<Section> sections = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
     private List<String> currentLines;
+    private int entries;
+    private boolean truncated;
+
+    private boolean reserve() {
+        if (++entries <= 10_000) return true;
+        if (!truncated) {
+            truncated = true;
+            warnings.add("Report truncated at 10000 entries; further details omitted");
+        }
+        return false;
+    }
 
     private record Section(String title, List<String> lines) {
     }
@@ -57,11 +68,13 @@ public final class FileReport {
 
     /** Start a new section; subsequent {@link #add} calls go into it. */
     public void openSection(String title) {
+        if (!reserve()) return;
         currentLines = new ArrayList<>();
         sections.add(new Section(title, currentLines));
     }
 
     public void add(String line) {
+        if (!reserve()) return;
         if (currentLines == null) {
             openSection("Details");
         }
@@ -90,7 +103,7 @@ public final class FileReport {
     }
 
     public void warn(String message) {
-        warnings.add(message);
+        if (reserve()) warnings.add(message);
     }
 
     /** Adds a warning and returns this report, for terse failure paths. */

@@ -10,6 +10,16 @@ import org.junit.jupiter.api.Test;
 
 class HexDumpTest {
 
+    @Test void streamedExportMatchesFullFormatting() throws Exception {
+        byte[] data = new byte[9001];
+        new java.util.Random(21).nextBytes(data);
+        for (boolean hex : new boolean[] {true, false}) {
+            var writer = new java.io.StringWriter();
+            HexDump.write(writer, data, hex);
+            org.junit.jupiter.api.Assertions.assertEquals(HexDump.format(data, 0, data.length, data.length, hex), writer.toString());
+        }
+    }
+
     @Test
     @DisplayName("the dump uses the legacy layout: address, hex, gap, ASCII")
     void legacyLayout() {

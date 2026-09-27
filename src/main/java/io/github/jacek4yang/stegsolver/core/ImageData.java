@@ -31,7 +31,7 @@ public final class ImageData {
         if (width <= 0 || height <= 0) {
             throw new IllegalArgumentException("Invalid image size: " + width + "x" + height);
         }
-        if (argb.length != width * height) {
+        if ((long) argb.length != (long) width * height) {
             throw new IllegalArgumentException(
                     "Pixel array length " + argb.length + " does not match " + width + "x" + height);
         }

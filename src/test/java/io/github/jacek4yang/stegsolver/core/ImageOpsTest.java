@@ -11,6 +11,11 @@ import org.junit.jupiter.api.Test;
 
 class ImageOpsTest {
 
+    @Test void imageDimensionsCannotOverflowPixelArrayValidation() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> ImageData.of(65536, 65536, new int[0], false));
+    }
+
     @Test
     @DisplayName("a quarter turn swaps the dimensions and moves known pixels predictably")
     void quarterTurn() {

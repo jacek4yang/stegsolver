@@ -6,7 +6,6 @@ import io.github.jacek4yang.stegsolver.transform.CombineMode;
 import io.github.jacek4yang.stegsolver.ui.FxUtils;
 import io.github.jacek4yang.stegsolver.ui.MainWindow;
 import io.github.jacek4yang.stegsolver.ui.ToolPane;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
 import javafx.geometry.Insets;
@@ -38,6 +37,7 @@ public final class CombinePane implements ToolPane {
     private final Button copyButton = new Button("Copy");
     private final Button clearButton = new Button("Unload");
 
+    private ImageData primary;
     private ImageData second;
     private ImageData result;
 
@@ -111,6 +111,7 @@ public final class CombinePane implements ToolPane {
 
     @Override
     public void onDocumentChanged() {
+        primary = null;
         result = null;
         updateButtons();
     }
@@ -122,8 +123,10 @@ public final class CombinePane implements ToolPane {
 
     private void loadSecond() {
         Optional<Path> chosen = window.chooseImage("Load the second image");
+        ImageData selectedPrimary = window.displayedImage();
         chosen.ifPresent(path -> window.runImageJob("load second image", () -> ImageIoUtil.load(path),
                 loaded -> {
+                    primary = selectedPrimary;
                     second = loaded;
                     secondLabel.setText("Second image: " + path.getFileName() + " ("
                             + loaded.width() + "x" + loaded.height() + ")");
@@ -135,6 +138,8 @@ public final class CombinePane implements ToolPane {
     }
 
     private void unload() {
+        window.cancelToolJobs();
+        primary = null;
         second = null;
         result = null;
         secondLabel.setText("No second image loaded");
@@ -150,14 +155,16 @@ public final class CombinePane implements ToolPane {
 
     private void recompute() {
         updateModeLabel();
-        ImageData first = window.displayedImage();
+        if (primary == null) primary = window.displayedImage();
+        ImageData first = primary;
         if (first == null || second == null) {
             updateButtons();
             return;
         }
         CombineMode mode = modeChoice.getValue();
+        ImageData secondImage = second;
         window.runImageJob("combine " + mode,
-                () -> mode.combine(first, second),
+                () -> mode.combine(first, secondImage),
                 combined -> {
                     result = combined;
                     window.showPreview(combined, "Combine " + mode.label());
@@ -181,13 +188,9 @@ public final class CombinePane implements ToolPane {
         }
         String suggestion = "combined-" + modeChoice.getValue().name().toLowerCase(java.util.Locale.ROOT)
                 + ".png";
-        FxUtils.chooseFileToSave(window.window(), "Save the combined image", suggestion).ifPresent(path -> {
-            try {
-                window.status(ImageIoUtil.save(result, path).message(path));
-            } catch (IOException e) {
-                FxUtils.error(window.window(), "Could not save the image", String.valueOf(e), e);
-            }
-        });
+        ImageData saved = result;
+        FxUtils.chooseFileToSave(window.window(), "Save the combined image", suggestion)
+                .ifPresent(path -> window.saveImage(saved, path));
     }
 
     private void copy() {

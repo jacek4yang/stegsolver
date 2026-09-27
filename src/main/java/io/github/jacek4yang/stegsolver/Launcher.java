@@ -78,6 +78,7 @@ public final class Launcher {
                 file = candidate;
             }
         }
+        Path generated = null;
         try {
             ImageData image;
             if (file != null) {
@@ -85,6 +86,9 @@ public final class Launcher {
                 System.out.println("Testing on " + file + " (" + image.width() + "x" + image.height() + ")");
             } else {
                 image = SyntheticImage.create();
+                generated = Files.createTempFile("stegsolver-self-test-", ".png");
+                ImageIoUtil.save(image, generated);
+                file = generated;
                 System.out.println("No file given: testing on a generated image ("
                         + image.width() + "x" + image.height() + ")");
             }
@@ -96,6 +100,11 @@ public final class Launcher {
             System.err.println("Self test could not start: " + e);
             e.printStackTrace();
             return 1;
+        } finally {
+            if (generated != null) {
+                try { Files.deleteIfExists(generated); }
+                catch (java.io.IOException ignored) { generated.toFile().deleteOnExit(); }
+            }
         }
     }
 

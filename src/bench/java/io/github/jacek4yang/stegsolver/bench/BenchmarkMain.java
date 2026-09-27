@@ -10,8 +10,8 @@ import org.openjdk.jmh.runner.options.TimeValue;
  * Runs the benchmarks, which live in the test sources so that the normal build stays untouched.
  *
  * <pre>
- *   mvn -Pbench test-compile exec:java
- *   mvn -Pbench test-compile exec:java -Dbench.include=TransformBenchmark -Dbench.size=1024
+ *   mvn -Pbench test-compile exec:exec
+ *   mvn -Pbench test-compile exec:exec -Dbench.include=TransformBenchmark -Dbench.size=1024
  * </pre>
  */
 public final class BenchmarkMain {
@@ -35,6 +35,7 @@ public final class BenchmarkMain {
                 .result(resultFile)
                 .shouldFailOnError(true)
                 .jvmArgsAppend("-Xmx2g");
+        builder.addProfiler(org.openjdk.jmh.profile.GCProfiler.class);
         if (!size.isBlank()) {
             builder.param("size", size);
         }

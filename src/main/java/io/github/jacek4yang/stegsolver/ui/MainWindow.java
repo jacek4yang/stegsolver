@@ -82,6 +82,16 @@ public final class MainWindow implements PreviewHost {
     private final CoalescingJobRunner scanRunner = new CoalescingJobRunner("stegsolver-scan", Platform::runLater);
     private final CoalescingJobRunner toolRunner = new CoalescingJobRunner("stegsolver-tool", Platform::runLater);
 
+    private boolean closed;
+    private final java.util.concurrent.ExecutorService fileWorker = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "stegsolver-save");
+        // Explicit saves finish before JVM shutdown, even if the window closes.
+        thread.setDaemon(false);
+        return thread;
+    });
+    private ImageData lastDocumentImage;
+    private ImageData displayed;
+
     private RenderCache renderCache = new RenderCache(RenderCache.MIN_BUDGET_BYTES);
 
     private final BorderPane root = new BorderPane();
@@ -591,16 +601,11 @@ public final class MainWindow implements PreviewHost {
             return;
         }
         workRunner.submit("open " + path.getFileName(), () -> ImageIoUtil.load(path), loaded -> {
-            try {
-                document.open(path);
-                renderCache = new RenderCache(RenderCache.budgetFor(loaded.width(), loaded.height()));
-                renderCache.clear();
-                showDocument();
-                status("Opened " + path.getFileName() + " (" + loaded.width() + "x" + loaded.height() + ")");
-                startBackgroundBarcodeScan();
-            } catch (IOException e) {
-                FxUtils.error(window(), "Could not open the image", "Reading " + path + " failed", e);
-            }
+            renderCache = new RenderCache(RenderCache.budgetFor(loaded.width(), loaded.height()));
+            document.acceptLoaded(path, loaded);
+            showDocument();
+            status("Opened " + path.getFileName() + " (" + loaded.width() + "x" + loaded.height() + ")");
+            startBackgroundBarcodeScan();
         }, error -> FxUtils.error(window(), "Could not open the image", String.valueOf(error), error));
     }
 
@@ -615,6 +620,7 @@ public final class MainWindow implements PreviewHost {
     }
 
     private void closeImage() {
+        workRunner.cancel();
         document.close();
         renderCache.clear();
         viewport.clear();
@@ -635,8 +641,34 @@ public final class MainWindow implements PreviewHost {
         toolRunner.submit(label, job, onSuccess, onFailure);
     }
 
+    public void cancelBarcodeScan() { scanRunner.cancel(); lastScanSequence++; }
+
+    public void cancelToolJobs() { toolRunner.cancel(); }
+
+    /** Explicit saves are never coalesced or cancelled by navigation. */
+    public <T> void runFileJob(CoalescingJobRunner.Job<T> job, java.util.function.Consumer<T> success) {
+        if (closed) return;
+        fileWorker.execute(() -> {
+            try {
+                T result = job.run();
+                Platform.runLater(() -> { if (!closed) success.accept(result); });
+            } catch (Exception error) {
+                Platform.runLater(() -> {
+                    if (!closed) FxUtils.error(window(), "Could not save the file", String.valueOf(error), error);
+                });
+            }
+        });
+    }
+
+    public void saveImage(ImageData data, Path path) {
+        runFileJob(() -> ImageIoUtil.save(data, path), outcome -> status(outcome.message(path)));
+    }
+
     /** Releases background resources; called when the window closes. */
     public void shutdown() {
+        if (closed) return;
+        closed = true;
+        fileWorker.shutdown();
         renderRunner.close();
         workRunner.close();
         scanRunner.close();
@@ -647,6 +679,18 @@ public final class MainWindow implements PreviewHost {
     }
 
     private void onDocumentChanged() {
+        renderRunner.cancel();
+        toolRunner.cancel();
+        scanRunner.cancel();
+        lastScanSequence++;
+        if (lastDocumentImage != document.image()) {
+            lastDocumentImage = document.image();
+            renderCache.clear();
+            displayed = null;
+            viewport.clear();
+            previewImage = null;
+            previewLabel = null;
+        }
         boolean open = document.isOpen();
         previousButton.setDisable(!open);
         nextButton.setDisable(!open);
@@ -670,6 +714,8 @@ public final class MainWindow implements PreviewHost {
         sizeLabel.setText(document.image().width() + "x" + document.image().height()
                 + " \u00b7 " + FxUtils.bytes(document.loadedBytes())
                 + " \u00b7 " + (document.image().hasAlpha() ? "alpha" : "no alpha"));
+        previewImage = null;
+        previewLabel = null;
         renderCurrentTransform();
         updateStatusBar();
     }
@@ -682,6 +728,7 @@ public final class MainWindow implements PreviewHost {
      * requests. That is what makes holding an arrow key smooth on a large image.</p>
      */
     private void renderCurrentTransform() {
+        renderRunner.cancel();
         if (!document.isOpen()) {
             return;
         }
@@ -689,7 +736,8 @@ public final class MainWindow implements PreviewHost {
         TransformDef def = TransformCatalog.byIndex(index);
         String key = "T" + index;
         WritableImage cached = renderCache.peek(key);
-        if (cached != null) {
+        if (cached != null && (index == 0 || document.engine().isCached(index))) {
+            displayed = document.currentImage();
             viewport.setContent(document.engine().pixelsFor(index), document.image().width(),
                     document.image().height(), def.kind() == io.github.jacek4yang.stegsolver.transform.TransformKind.ORIGINAL
                             && document.image().hasAlpha(),
@@ -701,11 +749,14 @@ public final class MainWindow implements PreviewHost {
         int height = document.image().height();
         boolean alpha = def.kind() == io.github.jacek4yang.stegsolver.transform.TransformKind.ORIGINAL
                 && document.image().hasAlpha();
+        var engine = document.engine();
         renderRunner.submit("transform " + index, () -> {
-            int[] pixels = document.engine().pixelsFor(index);
+            int[] pixels = engine.pixelsFor(index);
             return new Rendered(pixels, FxUtils.toFxImage(pixels, width, height), key, def, width, height,
                     alpha);
         }, rendered -> {
+            displayed = rendered.def().index() == 0 ? engine.source()
+                    : ImageData.opaque(rendered.width(), rendered.height(), rendered.pixels());
             renderCache.put(rendered.key(), rendered.image(), 4L * rendered.width() * rendered.height());
             viewport.setContent(rendered.pixels(), rendered.width(), rendered.height(), rendered.alpha(),
                     rendered.image(), rendered.def().label());
@@ -742,14 +793,9 @@ public final class MainWindow implements PreviewHost {
         String suggested = document.isOpen()
                 ? stripExtension(document.fileName()) + "-" + sanitise(document.transform().label()) + ".png"
                 : "solved.png";
-        FxUtils.chooseFileToSave(stage, "Save displayed image", suggested).ifPresent(path -> {
-            try {
-                ImageIoUtil.SaveOutcome outcome = ImageIoUtil.save(data, path);
-                status(outcome.message(path));
-            } catch (IOException e) {
-                FxUtils.error(window(), "Could not save the image", "Writing " + path + " failed", e);
-            }
-        });
+        if (data == null) return;
+        FxUtils.chooseFileToSave(stage, "Save displayed image", suggested).ifPresent(path ->
+            saveImage(data, path));
     }
 
     private void copyDisplayedImage() {
@@ -889,7 +935,7 @@ public final class MainWindow implements PreviewHost {
                 return;
             }
             Roi area = region == null || region.isEmpty() ? Roi.whole(image.width(), image.height()) : region;
-            ScanOptions options = thorough ? ScanOptions.thorough() : ScanOptions.defaults();
+            ScanOptions options = barcodePane.options(thorough);
             long sequence = ++lastScanSequence;
             status("Scanning " + (region == null ? "the image" : "the selection") + "...");
             scanRunner.submit("scan", () -> scanner.scan(image, area, options), result -> {
@@ -1088,7 +1134,7 @@ public final class MainWindow implements PreviewHost {
         if (previewImage != null) {
             return previewImage;
         }
-        return document.isOpen() ? document.currentImage() : null;
+        return displayed;
     }
 
     @Override
@@ -1103,6 +1149,7 @@ public final class MainWindow implements PreviewHost {
 
     @Override
     public void showPreview(ImageData data, String label) {
+        renderRunner.cancel();
         if (data == null) {
             showDocument();
             return;

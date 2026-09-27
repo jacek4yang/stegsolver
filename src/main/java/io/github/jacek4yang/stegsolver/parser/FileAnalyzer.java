@@ -89,8 +89,22 @@ public final class FileAnalyzer {
      */
     private static void appendDecodedFacts(FileReport report, byte[] bytes) {
         report.openSection("Decoded image");
-        try (var stream = new java.io.ByteArrayInputStream(bytes)) {
-            var image = javax.imageio.ImageIO.read(stream);
+        try (var stream = new javax.imageio.stream.MemoryCacheImageInputStream(
+                new java.io.ByteArrayInputStream(bytes))) {
+            var readers = javax.imageio.ImageIO.getImageReaders(stream);
+            if (!readers.hasNext()) {
+                report.warn("No image decoder recognised the file");
+                return;
+            }
+            var reader = readers.next();
+            java.awt.image.BufferedImage image;
+            try {
+                reader.setInput(stream);
+                ImageIoUtil.checkDimensions(reader.getWidth(0), reader.getHeight(0));
+                image = reader.read(0);
+            } finally {
+                reader.dispose();
+            }
             if (image == null) {
                 report.warn("The image could not be decoded even though the header was recognised");
                 return;

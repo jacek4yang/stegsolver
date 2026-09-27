@@ -86,6 +86,7 @@ public final class StereoTransform {
         int bestOffset = 0;
         long bestMatches = -1;
         for (int offset = 1; offset <= maxOffset; offset++) {
+            if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
             long matches = 0;
             long compared = 0;
             for (int y = 0; y < height; y += step) {

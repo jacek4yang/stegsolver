@@ -1,7 +1,5 @@
 package io.github.jacek4yang.stegsolver.ui;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -147,19 +145,14 @@ public final class ThemeManager {
         Process process = null;
         try {
             process = new ProcessBuilder(command).redirectErrorStream(true).start();
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append('\n');
-                }
-            }
             if (!process.waitFor(2, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 return null;
             }
-            return process.exitValue() == 0 ? output.toString().trim() : null;
+            try (var input = process.getInputStream()) {
+                String output = new String(input.readNBytes(16_384), StandardCharsets.UTF_8);
+                return process.exitValue() == 0 ? output.trim() : null;
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;

@@ -6,7 +6,6 @@ import io.github.jacek4yang.stegsolver.transform.StereoTransform;
 import io.github.jacek4yang.stegsolver.ui.FxUtils;
 import io.github.jacek4yang.stegsolver.ui.MainWindow;
 import io.github.jacek4yang.stegsolver.ui.ToolPane;
-import java.io.IOException;
 import java.nio.file.Path;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -187,11 +186,7 @@ public final class StereoPane implements ToolPane {
     }
 
     private void write(Path path) {
-        try {
-            window.status(ImageIoUtil.save(result, path).message(path));
-        } catch (IOException e) {
-            FxUtils.error(window.window(), "Could not save the image", String.valueOf(e), e);
-        }
+        window.saveImage(result, path);
     }
 
     private void copy() {

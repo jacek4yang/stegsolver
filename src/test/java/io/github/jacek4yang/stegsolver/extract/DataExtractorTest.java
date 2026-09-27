@@ -20,6 +20,23 @@ import org.junit.jupiter.api.Test;
 class DataExtractorTest {
 
     @Test
+    void arbitraryPlansAndBoundedPrefixesMatchFullExtraction() {
+        var random = new java.util.Random(43);
+        var image = io.github.jacek4yang.stegsolver.TestImages.randomArgb(9, 7, 81);
+        for (int trial = 0; trial < 128; trial++) {
+            var options = ExtractionOptions.none().withLsbFirst(random.nextBoolean())
+                    .withRowFirst(random.nextBoolean()).withInvertBits(random.nextBoolean());
+            for (var channel : io.github.jacek4yang.stegsolver.core.Channel.values())
+                for (int bit = 0; bit < 8; bit++) options = options.with(channel, bit, random.nextBoolean());
+            byte[] full = DataExtractor.extract(image, options);
+            for (int limit = 0; limit < 9; limit++) {
+                byte[] prefix = DataExtractor.extract(image, null, options, limit).data();
+                org.junit.jupiter.api.Assertions.assertArrayEquals(java.util.Arrays.copyOf(full, Math.min(limit, full.length)), prefix);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("a single LSB plane of one channel extracts exactly that bit per pixel")
     void singlePlaneExtraction() {
         // 8 pixels of red = 0b10110010, extracted LSB..MSB into bits 7..0 of one byte.

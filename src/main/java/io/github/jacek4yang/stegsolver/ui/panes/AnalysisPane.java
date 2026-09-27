@@ -28,6 +28,10 @@ import javafx.scene.layout.VBox;
 public final class AnalysisPane implements ToolPane {
 
     private final MainWindow window;
+    private final io.github.jacek4yang.stegsolver.core.CoalescingJobRunner runner =
+            new io.github.jacek4yang.stegsolver.core.CoalescingJobRunner("stegsolver-analysis", javafx.application.Platform::runLater);
+
+    @Override public void dispose() { runner.close(); }
     private final TextArea reportArea = new TextArea();
     private final Label summaryLabel = new Label("Open an image, then run the analysis.");
     private final Label warningsLabel = new Label();
@@ -82,6 +86,7 @@ public final class AnalysisPane implements ToolPane {
 
     @Override
     public void onDocumentChanged() {
+        runner.cancel();
         reportArea.clear();
         warningsLabel.setVisible(false);
         warningsLabel.setManaged(false);
@@ -98,10 +103,8 @@ public final class AnalysisPane implements ToolPane {
         }
         window.status("Analysing " + path.getFileName() + "...");
         // The analyser reads the whole file, so it runs on the background executor.
-        Thread.ofVirtual().name("stegsolver-analyse").start(() -> {
-            FileReport report = FileAnalyzer.analyze(path);
-            javafx.application.Platform.runLater(() -> show(report));
-        });
+        runner.submit("analyse", () -> FileAnalyzer.analyze(path), this::show,
+                error -> window.status("Analysis failed: " + error));
     }
 
     private void show(FileReport report) {

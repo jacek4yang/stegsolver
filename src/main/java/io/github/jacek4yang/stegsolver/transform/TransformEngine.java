@@ -42,7 +42,7 @@ public final class TransformEngine {
     /** A cache budget of eight images, clamped to a sane range. */
     public static long defaultCacheBudget(ImageData source) {
         long frameBytes = Math.max(1, source.estimatedBytes());
-        return Math.max(MIN_CACHE_BYTES, Math.min(MAX_CACHE_BYTES, frameBytes * 8));
+        return Math.max(MIN_CACHE_BYTES, Math.min(MAX_CACHE_BYTES, Math.min(Runtime.getRuntime().maxMemory() / 8, frameBytes * 8)));
     }
 
     public ImageData source() {

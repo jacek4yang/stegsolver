@@ -12,7 +12,10 @@ import com.google.zxing.ResultPoint;
 import com.google.zxing.common.GlobalHistogramBinarizer;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.multi.GenericMultipleBarcodeReader;
-import com.google.zxing.multi.qrcode.QRCodeMultiReader;
+import com.google.zxing.multi.qrcode.detector.MultiDetector;
+import com.google.zxing.qrcode.decoder.Decoder;
+import com.google.zxing.qrcode.decoder.QRCodeDecoderMetaData;
+import com.google.zxing.ReaderException;
 import io.github.jacek4yang.stegsolver.core.ImageData;
 import io.github.jacek4yang.stegsolver.core.ImageOps;
 import io.github.jacek4yang.stegsolver.core.Roi;
@@ -30,9 +33,8 @@ import java.util.Map;
  *   <li>the whole image or a dragged region can be scanned;</li>
  *   <li>{@code TRY_HARDER} is used together with practical fallbacks — inverted polarity, quarter turns,
  *       the alternate binarizer, a rescaled copy and pure barcode mode;</li>
- *   <li>several symbols in one image are found through the multiple symbol readers, and QR Structured
- *       Append sequences are merged by ZXing (within one bitmap) or by
- *       {@link StructuredAppendMerger} (across scans);</li>
+ *   <li>several symbols in one image are found through multiple symbol detection; QR Structured
+ *       Append headers are retained for explicit validated merging by {@link StructuredAppendMerger};</li>
  *   <li>the binary payload is the decoder's {@code BYTE_SEGMENTS} concatenated verbatim — it is never
  *       rebuilt from the decoded text;</li>
  *   <li>found positions are mapped back to original image coordinates so that an overlay can mark the
@@ -127,7 +129,7 @@ public final class BarcodeScanner {
             attempt.tryBitmaps(base, 0, 1.0, true, true);
         }
         if (!attempt.budgetExhausted() && attempt.hits.isEmpty()) {
-            // A 45 degree rotation occasionally rescues a symbol photographed at an angle; only for
+            // A quarter turn occasionally rescues a symbol photographed at an angle; only for
             // small images, because the copy is expensive.
             if (longest <= 1200) {
                 attempt.tryBitmaps(ImageOps.scaleNearest(ImageOps.rotateCounterClockwise(base), 1.0), 1, 1.0,
@@ -175,7 +177,7 @@ public final class BarcodeScanner {
         }
 
         private boolean budgetExhausted() {
-            return System.nanoTime() - startedAtNanos > budgetNanos;
+            return Thread.currentThread().isInterrupted() || System.nanoTime() - startedAtNanos > budgetNanos;
         }
 
         private void tryBitmaps(ImageData pixels, int quarterTurns, double scale, boolean pureBarcode,
@@ -219,7 +221,7 @@ public final class BarcodeScanner {
                 // The QR multiple reader ignores POSSIBLE_FORMATS, so it must be skipped when the user
                 // restricted the scan to other symbologies.
                 if (options.allFormats() || options.formats().contains(BarcodeFormat.QR_CODE)) {
-                    decodeMultiple(new QRCodeMultiReader(), bitmap, hints, attempt, description, inverted);
+                    decodeQrParts(bitmap, hints, attempt, description, inverted);
                 }
                 if (!hitAlmostFull()) {
                     decodeMultiple(new GenericMultipleBarcodeReader(new MultiFormatReader()), bitmap, hints,
@@ -244,9 +246,7 @@ public final class BarcodeScanner {
             }
             try {
                 Result[] results;
-                if (reader instanceof QRCodeMultiReader qrReader) {
-                    results = qrReader.decodeMultiple(bitmap, hints);
-                } else if (reader instanceof GenericMultipleBarcodeReader generic) {
+                if (reader instanceof GenericMultipleBarcodeReader generic) {
                     results = generic.decodeMultiple(bitmap, hints);
                 } else {
                     return;
@@ -256,6 +256,41 @@ public final class BarcodeScanner {
                 }
             } catch (NotFoundException | RuntimeException e) {
                 // Not finding anything is the normal case for most attempts.
+            }
+        }
+
+        /** Preserve individual SA headers; QRCodeMultiReader merges even unrelated sequences. */
+        private void decodeQrParts(BinaryBitmap bitmap, Map<DecodeHintType, Object> hints,
+                BitmapAttempt attempt, String description, boolean inverted) {
+            if (budgetExhausted()) return;
+            try {
+                var detected = new MultiDetector(bitmap.getBlackMatrix()).detectMulti(hints);
+                Decoder decoder = new Decoder();
+                for (var symbol : detected) {
+                    if (budgetExhausted() || hitAlmostFull()) break;
+                    try {
+                        var decoded = decoder.decode(symbol.getBits(), hints);
+                        ResultPoint[] points = symbol.getPoints();
+                        if (decoded.getOther() instanceof QRCodeDecoderMetaData mirrored) {
+                            mirrored.applyMirroredCorrection(points);
+                        }
+                        Result result = new Result(decoded.getText(), decoded.getRawBytes(), points, BarcodeFormat.QR_CODE);
+                        if (decoded.getByteSegments() != null)
+                            result.putMetadata(ResultMetadataType.BYTE_SEGMENTS, decoded.getByteSegments());
+                        if (decoded.getECLevel() != null)
+                            result.putMetadata(ResultMetadataType.ERROR_CORRECTION_LEVEL, decoded.getECLevel());
+                        result.putMetadata(ResultMetadataType.SYMBOLOGY_IDENTIFIER, "]Q" + decoded.getSymbologyModifier());
+                        if (decoded.hasStructuredAppend()) {
+                            result.putMetadata(ResultMetadataType.STRUCTURED_APPEND_SEQUENCE, decoded.getStructuredAppendSequenceNumber());
+                            result.putMetadata(ResultMetadataType.STRUCTURED_APPEND_PARITY, decoded.getStructuredAppendParity());
+                        }
+                        add(result, attempt, description, inverted);
+                    } catch (ReaderException ignored) {
+                        // Other detected candidates may still decode.
+                    }
+                }
+            } catch (NotFoundException ignored) {
+                // No QR candidates in this pass.
             }
         }
 

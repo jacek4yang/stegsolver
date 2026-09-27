@@ -12,7 +12,6 @@ import io.github.jacek4yang.stegsolver.extract.RgbOrder;
 import io.github.jacek4yang.stegsolver.ui.FxUtils;
 import io.github.jacek4yang.stegsolver.ui.MainWindow;
 import io.github.jacek4yang.stegsolver.ui.ToolPane;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.EnumMap;
@@ -43,6 +42,8 @@ import javafx.scene.layout.VBox;
 public final class ExtractPane implements ToolPane {
 
     private final MainWindow window;
+    private final io.github.jacek4yang.stegsolver.core.CoalescingJobRunner runner =
+            new io.github.jacek4yang.stegsolver.core.CoalescingJobRunner("stegsolver-extract", Platform::runLater);
     private final Map<Channel, CheckBox[]> planeBoxes = new EnumMap<>(Channel.class);
     private final Map<Channel, CheckBox> allBoxes = new EnumMap<>(Channel.class);
     private final ToggleGroup traversalGroup = new ToggleGroup();
@@ -315,6 +316,8 @@ public final class ExtractPane implements ToolPane {
 
     @Override
     public void onDocumentChanged() {
+        runner.cancel();
+        extractionSequence++;
         extracted = new byte[0];
         lastOptions = null;
         preview.clear();
@@ -389,21 +392,27 @@ public final class ExtractPane implements ToolPane {
         int sequence = ++extractionSequence;
         previewButton.setDisable(true);
         window.status("Extracting...");
-        Thread.ofVirtual().name("stegsolver-extract").start(() -> {
+        runner.submit("extract", () -> {
             DataExtractor.Result result = DataExtractor.extract(image, region, options, Integer.MAX_VALUE);
-            // Classification is cheap compared to the extraction and gives the analyst an immediate hint.
-            PayloadInfo info = PayloadDetector.detect(result.data(), null);
-            Platform.runLater(() -> {
-                if (sequence != extractionSequence) {
-                    return;
-                }
-                extracted = result.data();
-                showPreview(info);
-                updateButtons(!result.isEmpty());
-                window.status("Extracted " + FxUtils.bytes(result.data().length) + " from "
-                        + options.selectedCount() + " plane(s)");
-            });
+            return new Extracted(result, PayloadDetector.detect(result.data(), null));
+        }, outcome -> {
+            if (sequence != extractionSequence) return;
+            extracted = outcome.result().data();
+            showPreview(outcome.info());
+            updateButtons(extracted.length > 0);
+            window.status("Extracted " + FxUtils.bytes(extracted.length) + " from "
+                    + options.selectedCount() + " plane(s)");
+        }, error -> {
+            updateButtons(false);
+            window.status("Extraction failed: " + error);
         });
+    }
+
+    private record Extracted(DataExtractor.Result result, PayloadInfo info) {}
+
+    @Override
+    public void dispose() {
+        runner.close();
     }
 
     private void showPreview(PayloadInfo info) {
@@ -438,15 +447,10 @@ public final class ExtractPane implements ToolPane {
         String suggested = window.document().isOpen()
                 ? window.document().fileName() + "-extract.bin"
                 : "extract.bin";
+        byte[] data = extracted;
         FxUtils.chooseFileToSave(window.window(), "Save extracted data", suggested, "bin", "Binary files")
-                .ifPresent(path -> {
-                    try {
-                        Files.write(path, extracted);
-                        window.status("Saved " + FxUtils.bytes(extracted.length) + " to " + path.getFileName());
-                    } catch (IOException e) {
-                        FxUtils.error(window.window(), "Could not save the data", String.valueOf(e), e);
-                    }
-                });
+                .ifPresent(path -> window.runFileJob(() -> Files.write(path, data),
+                        saved -> window.status("Saved " + FxUtils.bytes(data.length) + " to " + saved.getFileName())));
     }
 
     private void saveText() {
@@ -456,17 +460,14 @@ public final class ExtractPane implements ToolPane {
         String suggested = window.document().isOpen()
                 ? window.document().fileName() + "-extract.txt"
                 : "extract.txt";
+        byte[] data = extracted;
+        boolean hex = includeHex.isSelected();
         FxUtils.chooseFileToSave(window.window(), "Save extract preview", suggested, "txt", "Text files")
-                .ifPresent(path -> {
-                    try {
-                        String text = HexDump.format(extracted, 0, extracted.length, extracted.length,
-                                includeHex.isSelected());
-                        Files.writeString(path, text, StandardCharsets.UTF_8);
-                        window.status("Saved the preview to " + path.getFileName());
-                    } catch (IOException e) {
-                        FxUtils.error(window.window(), "Could not save the preview", String.valueOf(e), e);
+                .ifPresent(path -> window.runFileJob(() -> {
+                    try (var writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+                        HexDump.write(writer, data, hex);
                     }
-                });
+                    return path;
+                }, saved -> window.status("Saved the preview to " + saved.getFileName())));
     }
-
 }

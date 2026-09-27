@@ -19,8 +19,8 @@ import javafx.stage.StageStyle;
 import javafx.stage.Window;
 
 /**
- * A full screen overlay that lets the user drag a rectangle over the screen and returns it in device
- * pixels, ready for {@link ScreenGrabber#capture(Rectangle)}.
+ * A full screen overlay that lets the user drag a rectangle over the screen and returns it in logical screen
+ * coordinates, ready for {@link ScreenGrabber#capture(Rectangle)}.
  *
  * <p>This is the replacement for the original tool's always-on-top selection window: it is dismissible
  * with Escape or a right click, it shows the size of the selection while dragging, and on Wayland (where
@@ -32,7 +32,7 @@ public final class ScreenRegionOverlay {
     private ScreenRegionOverlay() {
     }
 
-    /** Shows the overlay and returns the dragged region in device pixels, if the user selected one. */
+    /** Shows the overlay and returns the dragged region in logical screen coordinates, if the user selected one. */
     public static Optional<Rectangle> pickRegion(Window owner) {
         Screen screen = owner == null ? Screen.getPrimary() : primaryScreenOf(owner);
         Rectangle2D bounds = screen.getBounds();
@@ -120,17 +120,12 @@ public final class ScreenRegionOverlay {
         return Optional.ofNullable(selection[0]);
     }
 
-    /**
-     * Converts overlay local coordinates into device pixels of the screen, which is what screen capture
-     * works in. On a HiDPI screen the logical coordinates of JavaFX and the device pixels of the capture
-     * differ by the output scale.
-     */
+    /** Converts local coordinates to AWT Robot user-space screen coordinates. */
     static Rectangle toDevicePixels(Stage overlay, Screen screen, double localX, double localY, double width,
             double height) {
         double logicalX = overlay.getX() + localX;
         double logicalY = overlay.getY() + localY;
-        return ScreenGrabber.toDeviceRectangle(logicalX, logicalY, width, height, screen.getOutputScaleX(),
-                screen.getOutputScaleY());
+        return ScreenGrabber.toDeviceRectangle(logicalX, logicalY, width, height, 1.0, 1.0);
     }
 
     private static Screen primaryScreenOf(Window owner) {

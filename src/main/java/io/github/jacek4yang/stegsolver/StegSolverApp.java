@@ -108,6 +108,15 @@ public final class StegSolverApp extends Application {
             wait.play();
             return;
         }
+        if (!getParameters().getRaw().isEmpty()
+                && (!window.document().isOpen() || window.displayedImage() == null
+                || !java.util.Arrays.equals(window.viewport().viewPixels(), window.document().currentPixels()))) {
+            System.err.println("Smoke test failed: requested image/transform was not rendered");
+            window.shutdown();
+            Platform.exit();
+            System.exit(1);
+            return;
+        }
         System.out.println("StegSolver smoke test layout: " + window.layoutDiagnostics());
         if (Boolean.getBoolean("stegsolver.debugNodes")) {
             snapshotNode("target/viewport-node.png", window.viewport());

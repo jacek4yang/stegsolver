@@ -73,6 +73,8 @@ public final class BarcodePane implements ToolPane {
     }
 
     private final MainWindow window;
+    private final io.github.jacek4yang.stegsolver.core.CoalescingJobRunner runner =
+            new io.github.jacek4yang.stegsolver.core.CoalescingJobRunner("stegsolver-barcode", javafx.application.Platform::runLater);
     private final ObservableList<BarcodeHit> hits = FXCollections.observableArrayList();
     private final ListView<BarcodeHit> hitList = new ListView<>(hits);
 
@@ -131,6 +133,7 @@ public final class BarcodePane implements ToolPane {
     private final Button copyTextButton = new Button("Copy Text");
     private final Button copyHexButton = new Button("Copy Hex");
 
+    private final java.util.List<BarcodeHit> appendParts = new java.util.ArrayList<>();
     private ScanResult current;
 
     public BarcodePane(MainWindow window) {
@@ -365,7 +368,7 @@ public final class BarcodePane implements ToolPane {
     }
 
     /** Applies the panel's options to a scan request. */
-    private ScanOptions options(boolean thorough) {
+    public ScanOptions options(boolean thorough) {
         return ScanOptions.defaults()
                 .withTryHarder(true)
                 .withTryInverted(tryInverted.isSelected())
@@ -400,27 +403,23 @@ public final class BarcodePane implements ToolPane {
         }
         java.awt.Rectangle device = region.get();
         window.status("Capturing " + device.width + "x" + device.height + " from the screen...");
-        Thread.ofVirtual().name("stegsolver-capture").start(() -> {
-            try {
-                ImageData captured = ScreenGrabber.capture(device);
-                javafx.application.Platform.runLater(() -> {
-                    window.showPreview(captured, "Screen capture " + device.width + "x" + device.height);
-                    scanImage(captured, "screen region");
-                });
-            } catch (RuntimeException e) {
-                javafx.application.Platform.runLater(() -> FxUtils.error(window.window(),
-                        "Screen capture failed", String.valueOf(e), e));
-            }
-        });
+        runner.submit("capture", () -> ScreenGrabber.capture(device), captured -> {
+            window.showPreview(captured, "Screen capture " + device.width + "x" + device.height);
+            scanImage(captured, "screen region");
+        }, error -> FxUtils.error(window.window(), "Screen capture failed", String.valueOf(error), error));
     }
 
     private void scanImage(ImageData image, String label) {
         window.status("Scanning the " + label + "...");
-        Thread.ofVirtual().name("stegsolver-scan").start(() -> {
-            ScanResult result = new io.github.jacek4yang.stegsolver.barcode.BarcodeScanner()
-                    .scan(image, options(false));
-            javafx.application.Platform.runLater(() -> addResults(result, false));
-        });
+        ScanOptions settings = options(false);
+        runner.submit("scan", () -> new io.github.jacek4yang.stegsolver.barcode.BarcodeScanner()
+                .scan(image, settings), result -> addResults(result, false),
+                error -> window.status("Scan failed: " + error));
+    }
+
+    @Override
+    public void dispose() {
+        runner.close();
     }
 
     // ------------------------------------------------------------------ results
@@ -432,6 +431,13 @@ public final class BarcodePane implements ToolPane {
         }
         for (BarcodeHit hit : result.hits()) {
             HitMerge.add(hits, hit);
+            if (hit.structuredAppend() != null) {
+                BarcodeHit retained = new BarcodeHit(hit.format(), hit.text(), hit.payload(), hit.byteSegments(),
+                        hit.decoderRawBytes(), List.of(), Roi.EMPTY, hit.rotationDegrees(), hit.inverted(),
+                        hit.metadata(), hit.structuredAppend(), hit.payloadInfo());
+                HitMerge.add(appendParts, retained);
+                if (appendParts.size() > 256) appendParts.removeFirst();
+            }
         }
         summaryLabel.setText(result.summary() + summariseNotes(result.notes()));
         statusLabel.setText(result.notes().isEmpty() ? "" : String.join("\n", result.notes()));
@@ -466,9 +472,16 @@ public final class BarcodePane implements ToolPane {
     }
 
     public void clearResults() {
+        appendParts.clear();
+        clearVisibleResults();
+    }
+
+    private void clearVisibleResults() {
+        runner.cancel();
+        window.cancelBarcodeScan();
         hits.clear();
         current = null;
-        summaryLabel.setText("No scan yet.");
+        summaryLabel.setText(appendParts.isEmpty() ? "No scan yet." : appendParts.size() + " append part(s) retained; scan another image or Merge append. Clear results discards them.");
         selectedSymbolContainer.setVisible(false);
         selectedSymbolContainer.setManaged(false);
         preview.clear();
@@ -477,11 +490,13 @@ public final class BarcodePane implements ToolPane {
     }
 
     private void mergeStructuredAppend() {
-        if (hits.isEmpty()) {
+        if (hits.isEmpty() && appendParts.isEmpty()) {
             window.status("Nothing to merge");
             return;
         }
-        StructuredAppendMerger.MergeOutcome outcome = StructuredAppendMerger.merge(List.copyOf(hits));
+        java.util.List<BarcodeHit> candidates = new java.util.ArrayList<>(appendParts);
+        for (BarcodeHit hit : hits) if (hit.structuredAppend() == null) candidates.add(hit);
+        StructuredAppendMerger.MergeOutcome outcome = StructuredAppendMerger.merge(candidates);
         hits.setAll(outcome.unmerged());
         for (BarcodeHit merged : outcome.merged()) {
             HitMerge.add(hits, merged);
@@ -681,15 +696,7 @@ public final class BarcodePane implements ToolPane {
     }
 
     private String suggestedName(BarcodeHit hit, String extension) {
-        String base = window.document().isOpen()
-                ? stripExtension(window.document().fileName()) + "-barcode" + (hits.indexOf(hit) + 1)
-                : "payload";
-        return base + "." + extension;
-    }
-
-    private static String stripExtension(String name) {
-        int dot = name.lastIndexOf('.');
-        return dot > 0 ? name.substring(0, dot) : name;
+        return "payload-" + Math.max(1, hits.indexOf(hit) + 1) + "." + extension;
     }
 
     private void copyText() {
@@ -708,8 +715,7 @@ public final class BarcodePane implements ToolPane {
         byte[] data = representation.getValue() == Representation.RAW && hit.decoderRawBytes() != null
                 ? hit.decoderRawBytes() : hit.payloadOrEmpty();
         if (data.length == 0) {
-            FxUtils.copyText(HexDump.hex(hit.decoderRawBytes(), 0, hit.decoderRawBytes().length, 4096));
-            window.status("Payload bytes are not available; copied the decoder raw bytes instead");
+            window.status("No bytes in the selected representation; choose Decoder raw bytes explicitly if needed");
             return;
         }
         FxUtils.copyHex(data, 32);
@@ -723,6 +729,7 @@ public final class BarcodePane implements ToolPane {
 
     @Override
     public void onDocumentChanged() {
-        clearResults();
+        runner.cancel();
+        clearVisibleResults();
     }
 }

@@ -17,7 +17,7 @@ It is a rebuild of the original [StegSolve](https://github.com/caesum/stegsolve)
 its transform numbering and its extraction conventions so that existing habits, notes and
 walkthroughs still apply.
 
-![StegSolver](docs/screenshot-placeholder.png)
+![StegSolver](docs/screenshot.png)
 
 ## Highlights
 
@@ -41,7 +41,14 @@ walkthroughs still apply.
   computation that discards superseded work.
 * **Dark, light and system themes**, HiDPI aware, no Swing anywhere.
 
-## Requirements
+## Download and start
+
+Download the Windows x64 ZIP or Linux x64 tar.gz from [Releases](https://github.com/jacek4yang/stegsolver/releases).
+Extract the whole archive. On Windows, run `StegSolver/StegSolver.exe`; on Linux Mint Cinnamon X11,
+run `StegSolver/bin/StegSolver`. Java 21 and JavaFX are included. Keep the runtime and app folders
+beside the launcher. The portable builds are unsigned.
+
+## Building requirements
 
 * **JDK 21** (Temurin, Microsoft or any other build) — `java`, `jlink` and `jpackage` on `PATH`.
 * **Maven 3.9+** for building from source.
@@ -98,10 +105,10 @@ option combination is compared against it byte for byte.
 
 ## Packaging
 
-Both scripts produce a self contained application (Java 21 runtime + JavaFX inside it) that needs
-nothing installed on the user's machine. Ready-to-run builds can be taken from the artifacts of the
-[Package](../../actions/workflows/package.yml) workflow; pushing a `v*` tag builds them and attaches
-them to a release:
+Both scripts produce a self contained application (Java 21 runtime + JavaFX inside it).
+Linux needs the GTK 3/X11 desktop libraries supplied by Linux Mint. Ready-to-run builds can be taken from the artifacts of the
+[Package](../../actions/workflows/package.yml) workflow. Main and tag builds run tests and verify
+both platforms; releases are published only after the matching CI and package runs succeed:
 
 ```bash
 packaging/package-linux.sh                 # Linux Mint / Debian: app-image by default
@@ -118,6 +125,7 @@ Details, including why `jlink` works with JavaFX and ZXing, are in
 
 ## Documentation
 
+* [docs/release-audit.md](docs/release-audit.md) ? verification, performance and practical limits.
 * [docs/architecture.md](docs/architecture.md) — module layout, threading, design decisions.
 * [docs/legacy-parity.md](docs/legacy-parity.md) — what was preserved, what changed and why.
 * [docs/packaging.md](docs/packaging.md) — jlink/jpackage, targets and limitations.

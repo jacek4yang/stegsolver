@@ -22,6 +22,8 @@ public final class HitMerge {
 
     /** True when two hits describe the same symbol: same content and the same place. */
     public static boolean describesSameSymbol(BarcodeHit existing, BarcodeHit candidate) {
+        if (!java.util.Objects.equals(existing.structuredAppend(), candidate.structuredAppend())) return false;
+        if (!java.util.Objects.equals(existing.text(), candidate.text())) return false;
         if (existing.format() != candidate.format()) {
             return false;
         }
