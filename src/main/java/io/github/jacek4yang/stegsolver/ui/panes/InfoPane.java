@@ -13,6 +13,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 /**
@@ -54,6 +55,7 @@ public final class InfoPane implements ToolPane {
                 section("Selected region", selectionLabel));
         ScrollPane scroll = new ScrollPane(box);
         scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         scroll.setPadding(new Insets(10));
         VBox.setVgrow(scroll, Priority.ALWAYS);
         return scroll;
@@ -144,7 +146,7 @@ public final class InfoPane implements ToolPane {
     private static void row(GridPane grid, int row, String label, String value) {
         Label name = new Label(label);
         name.getStyleClass().add("steg-meta-key");
-        name.setMinWidth(110);
+        name.setMinWidth(Region.USE_PREF_SIZE);
         Label text = new Label(value);
         text.getStyleClass().add("steg-meta-val");
         text.setWrapText(true);

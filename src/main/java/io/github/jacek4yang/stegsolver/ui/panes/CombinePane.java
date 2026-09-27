@@ -14,8 +14,12 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 /**
@@ -46,12 +50,17 @@ public final class CombinePane implements ToolPane {
         modeChoice.getItems().setAll(CombineMode.values());
         modeChoice.setValue(CombineMode.XOR);
         modeChoice.setOnAction(event -> recompute());
+        previousButton.setMinWidth(Region.USE_PREF_SIZE);
         previousButton.setTooltip(new Tooltip("Previous combination mode"));
         previousButton.setOnAction(event -> modeChoice.setValue(CombineMode.previous(modeChoice.getValue())));
+        nextButton.setMinWidth(Region.USE_PREF_SIZE);
         nextButton.setTooltip(new Tooltip("Next combination mode"));
         nextButton.setOnAction(event -> modeChoice.setValue(CombineMode.next(modeChoice.getValue())));
+        saveButton.setMinWidth(Region.USE_PREF_SIZE);
         saveButton.setOnAction(event -> save());
+        copyButton.setMinWidth(Region.USE_PREF_SIZE);
         copyButton.setOnAction(event -> copy());
+        clearButton.setMinWidth(Region.USE_PREF_SIZE);
         clearButton.setOnAction(event -> unload());
         secondLabel.setWrapText(true);
         updateModeLabel();
@@ -66,6 +75,7 @@ public final class CombinePane implements ToolPane {
     @Override
     public Node content() {
         Button loadButton = new Button("Load Second Image...");
+        loadButton.setMinWidth(Region.USE_PREF_SIZE);
         loadButton.setOnAction(event -> loadSecond());
 
         Label hint = new Label("The primary image is the one currently shown in the central view; the second image is "
@@ -76,7 +86,7 @@ public final class CombinePane implements ToolPane {
         secondLabel.setWrapText(true);
         secondLabel.getStyleClass().add("steg-hint");
 
-        HBox secondRow = new HBox(6, loadButton, clearButton);
+        FlowPane secondRow = new FlowPane(6, 6, loadButton, clearButton);
         secondRow.setAlignment(Pos.CENTER_LEFT);
 
         VBox secondCard = new VBox(8,
@@ -86,6 +96,8 @@ public final class CombinePane implements ToolPane {
         secondCard.getStyleClass().add("steg-card");
 
         modeLabel.getStyleClass().addAll("mono", "steg-transform-label");
+        modeChoice.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(modeChoice, Priority.ALWAYS);
         HBox modeRow = new HBox(6, previousButton, modeChoice, nextButton);
         modeRow.setAlignment(Pos.CENTER_LEFT);
 
@@ -95,7 +107,7 @@ public final class CombinePane implements ToolPane {
                 modeRow);
         modeCard.getStyleClass().add("steg-card");
 
-        HBox actionRow = new HBox(8, saveButton, copyButton);
+        FlowPane actionRow = new FlowPane(8, 6, saveButton, copyButton);
         actionRow.setAlignment(Pos.CENTER_LEFT);
 
         VBox actionCard = new VBox(8,
@@ -106,7 +118,13 @@ public final class CombinePane implements ToolPane {
 
         VBox box = new VBox(10, secondCard, modeCard, actionCard);
         box.setPadding(new Insets(10));
-        return box;
+
+        ScrollPane scroll = new ScrollPane(box);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setPadding(new Insets(0));
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        return scroll;
     }
 
     @Override

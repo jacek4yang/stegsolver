@@ -38,6 +38,7 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -165,34 +166,44 @@ public final class BarcodePane implements ToolPane {
         safetyLabel.setWrapText(true);
         safetyLabel.getStyleClass().add("steg-hint");
 
+        scanImageButton.setMinWidth(Region.USE_PREF_SIZE);
         scanImageButton.setTooltip(new Tooltip("Scan what the viewport currently shows (Ctrl+B)"));
         scanImageButton.setOnAction(event -> window.scanRegion(null, deepSearch.isSelected()));
 
+        scanSelectionButton.setMinWidth(Region.USE_PREF_SIZE);
         scanSelectionButton.setDisable(true);
         scanSelectionButton.setTooltip(new Tooltip("Enable \"Select region\" in the toolbar, drag a box, then scan it"));
         scanSelectionButton.setOnAction(event -> window.scanRegion(window.selection(), deepSearch.isSelected()));
 
+        scanScreenButton.setMinWidth(Region.USE_PREF_SIZE);
         scanScreenButton.setTooltip(new Tooltip("Draw a box over the screen (X11 only) and scan it"));
         scanScreenButton.setOnAction(event -> scanScreenRegion());
 
+        mergeButton.setMinWidth(Region.USE_PREF_SIZE);
         mergeButton.setTooltip(new Tooltip("Merge QR Structured Append parts across all scans"));
         mergeButton.setOnAction(event -> mergeStructuredAppend());
 
+        clearButton.setMinWidth(Region.USE_PREF_SIZE);
         clearButton.setOnAction(event -> clearResults());
 
+        savePayloadButton.setMinWidth(Region.USE_PREF_SIZE);
         savePayloadButton.setTooltip(new Tooltip("Save the binary payload bytes directly to a file"));
         savePayloadButton.setOnAction(event -> savePayload());
 
+        saveTextButton.setMinWidth(Region.USE_PREF_SIZE);
         saveTextButton.setTooltip(new Tooltip("Save the decoded text to a .txt file"));
         saveTextButton.setOnAction(event -> saveText());
 
+        copyTextButton.setMinWidth(Region.USE_PREF_SIZE);
         copyTextButton.setTooltip(new Tooltip("Copy the decoded text to clipboard"));
         copyTextButton.setOnAction(event -> copyText());
 
+        copyHexButton.setMinWidth(Region.USE_PREF_SIZE);
         copyHexButton.setTooltip(new Tooltip("Copy payload bytes formatted as hex to clipboard"));
         copyHexButton.setOnAction(event -> copyHex());
 
         for (CheckBox box : List.of(multipleSymbols, tryInverted, tryRotated, deepSearch, alsoScreen)) {
+            box.setWrapText(true);
             box.setOnAction(event -> updateButtons());
         }
     }
@@ -200,26 +211,33 @@ public final class BarcodePane implements ToolPane {
     private void buildSelectedSymbolUI() {
         // Badges row
         formatBadge.getStyleClass().addAll("steg-badge", "steg-badge-info");
+        formatBadge.setMinWidth(Region.USE_PREF_SIZE);
         fileTypeBadge.getStyleClass().addAll("steg-badge", "steg-badge-payload");
+        fileTypeBadge.setMinWidth(Region.USE_PREF_SIZE);
         payloadSizeBadge.getStyleClass().addAll("steg-badge");
+        payloadSizeBadge.setMinWidth(Region.USE_PREF_SIZE);
         symbolPositionLabel.getStyleClass().addAll("mono", "steg-hint");
+        symbolPositionLabel.setWrapText(true);
 
         // 1. Text Payload Card
         textPayloadCard.getStyleClass().add("steg-card");
         Label textTitle = new Label("Text Payload");
         textTitle.getStyleClass().add("steg-card-header");
         textCountBadge.getStyleClass().addAll("steg-badge", "steg-badge-info");
+        textCountBadge.setMinWidth(Region.USE_PREF_SIZE);
 
         Region textSpacer = new Region();
         HBox.setHgrow(textSpacer, Priority.ALWAYS);
 
         Button miniCopyText = new Button("Copy");
         miniCopyText.getStyleClass().add("steg-pill-btn");
+        miniCopyText.setMinWidth(Region.USE_PREF_SIZE);
         miniCopyText.setOnAction(e -> copyText());
         miniCopyText.disableProperty().bind(copyTextButton.disabledProperty());
 
         Button miniSaveText = new Button("Save...");
         miniSaveText.getStyleClass().add("steg-pill-btn");
+        miniSaveText.setMinWidth(Region.USE_PREF_SIZE);
         miniSaveText.setOnAction(e -> saveText());
         miniSaveText.disableProperty().bind(saveTextButton.disabledProperty());
 
@@ -237,17 +255,20 @@ public final class BarcodePane implements ToolPane {
         Label binaryTitle = new Label("Binary Payload & File Type");
         binaryTitle.getStyleClass().add("steg-card-header");
         binaryStatusBadge.getStyleClass().addAll("steg-badge");
+        binaryStatusBadge.setMinWidth(Region.USE_PREF_SIZE);
 
         Region binarySpacer = new Region();
         HBox.setHgrow(binarySpacer, Priority.ALWAYS);
 
         Button miniSaveBin = new Button("Save .bin...");
         miniSaveBin.getStyleClass().add("steg-pill-btn");
+        miniSaveBin.setMinWidth(Region.USE_PREF_SIZE);
         miniSaveBin.setOnAction(e -> savePayload());
         miniSaveBin.disableProperty().bind(savePayloadButton.disabledProperty());
 
         Button miniCopyHex = new Button("Copy Hex");
         miniCopyHex.getStyleClass().add("steg-pill-btn");
+        miniCopyHex.setMinWidth(Region.USE_PREF_SIZE);
         miniCopyHex.setOnAction(e -> copyHex());
         miniCopyHex.disableProperty().bind(copyHexButton.disabledProperty());
 
@@ -283,7 +304,7 @@ public final class BarcodePane implements ToolPane {
         previewLimit.setValue(2048);
         previewLimit.setOnAction(event -> refreshPreview());
 
-        HBox previewHeader = new HBox(6, previewTitle, new Region(), representation, previewLimit);
+        FlowPane previewHeader = new FlowPane(6, 6, previewTitle, representation, previewLimit);
         previewHeader.setAlignment(Pos.CENTER_LEFT);
 
         preview.setEditable(false);
@@ -293,10 +314,10 @@ public final class BarcodePane implements ToolPane {
         previewCard.getChildren().addAll(previewHeader, preview);
 
         // Assemble selected symbol container
-        HBox badgeBar = new HBox(6, formatBadge, fileTypeBadge, payloadSizeBadge);
+        FlowPane badgeBar = new FlowPane(6, 6, formatBadge, fileTypeBadge, payloadSizeBadge);
         badgeBar.setAlignment(Pos.CENTER_LEFT);
 
-        HBox actionButtonBar = new HBox(6, savePayloadButton, saveTextButton, copyTextButton, copyHexButton);
+        FlowPane actionButtonBar = new FlowPane(6, 6, savePayloadButton, saveTextButton, copyTextButton, copyHexButton);
         actionButtonBar.setAlignment(Pos.CENTER_LEFT);
 
         selectedSymbolContainer.getChildren().addAll(
@@ -327,13 +348,13 @@ public final class BarcodePane implements ToolPane {
 
     @Override
     public Node content() {
-        HBox scanButtons = new HBox(6, scanImageButton, scanSelectionButton, scanScreenButton);
+        FlowPane scanButtons = new FlowPane(6, 6, scanImageButton, scanSelectionButton, scanScreenButton);
         scanButtons.setAlignment(Pos.CENTER_LEFT);
 
         VBox options = new VBox(4, multipleSymbols, tryInverted, tryRotated, deepSearch, alsoScreen);
         options.setPadding(new Insets(2, 0, 2, 4));
 
-        HBox mergeClearRow = new HBox(6, mergeButton, clearButton);
+        FlowPane mergeClearRow = new FlowPane(6, 6, mergeButton, clearButton);
         mergeClearRow.setAlignment(Pos.CENTER_LEFT);
 
         VBox scanCard = new VBox(8,
@@ -357,6 +378,7 @@ public final class BarcodePane implements ToolPane {
 
         ScrollPane scroll = new ScrollPane(column);
         scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         scroll.setPadding(new Insets(0));
         return scroll;
     }
@@ -598,7 +620,7 @@ public final class BarcodePane implements ToolPane {
     private static void addMetaRow(GridPane grid, int row, String key, String val) {
         Label k = new Label(key);
         k.getStyleClass().add("steg-meta-key");
-        k.setMinWidth(120);
+        k.setMinWidth(Region.USE_PREF_SIZE);
         Label v = new Label(val);
         v.getStyleClass().add("steg-meta-val");
         v.setWrapText(true);
@@ -642,7 +664,7 @@ public final class BarcodePane implements ToolPane {
                 && (hit.decoderRawBytes() == null || hit.decoderRawBytes().length == 0)));
         saveTextButton.setDisable(!hasText);
         copyTextButton.setDisable(!hasText);
-        scanSelectionButton.setDisable(window.selection() == null || window.selection().isEmpty());
+        scanSelectionButton.setDisable(window == null || window.selection() == null || window.selection().isEmpty());
         savePayloadButton.setTooltip(new Tooltip(hasPayload
                 ? "Write the exact payload bytes to a file (suggested: ."
                         + hit.payloadInfo().suggestedExtension() + ")"

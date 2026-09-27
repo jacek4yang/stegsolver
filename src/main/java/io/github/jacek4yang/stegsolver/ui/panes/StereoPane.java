@@ -13,11 +13,15 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Slider;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 /**
@@ -45,10 +49,13 @@ public final class StereoPane implements ToolPane {
 
     public StereoPane(MainWindow window) {
         this.window = window;
+        previousButton.setMinWidth(Region.USE_PREF_SIZE);
         previousButton.setTooltip(new Tooltip("Decrease the offset"));
         previousButton.setOnAction(event -> setOffset(offset - 1));
+        nextButton.setMinWidth(Region.USE_PREF_SIZE);
         nextButton.setTooltip(new Tooltip("Increase the offset"));
         nextButton.setOnAction(event -> setOffset(offset + 1));
+        solveButton.setMinWidth(Region.USE_PREF_SIZE);
         solveButton.setTooltip(new Tooltip("Search for the offset with the strongest self similarity"));
         solveButton.setOnAction(event -> solve());
         offsetSlider.setPrefWidth(200);
@@ -57,10 +64,15 @@ public final class StereoPane implements ToolPane {
                 setOffset(value.intValue());
             }
         });
+        offsetSpinner.setMinWidth(Region.USE_PREF_SIZE);
         offsetSpinner.setPrefWidth(90);
         offsetSpinner.valueProperty().addListener((observable, old, value) -> setOffset(value));
+        edgeHold.setWrapText(true);
         edgeHold.setOnAction(event -> recompute());
+        autoSolve.setWrapText(true);
+        saveButton.setMinWidth(Region.USE_PREF_SIZE);
         saveButton.setOnAction(event -> save());
+        copyButton.setMinWidth(Region.USE_PREF_SIZE);
         copyButton.setOnAction(event -> copy());
         updateButtons();
     }
@@ -83,7 +95,7 @@ public final class StereoPane implements ToolPane {
 
         offsetLabel.getStyleClass().addAll("mono", "steg-transform-label");
 
-        HBox offsetNav = new HBox(6, previousButton, offsetSpinner, nextButton, solveButton);
+        FlowPane offsetNav = new FlowPane(6, 6, previousButton, offsetSpinner, nextButton, solveButton);
         offsetNav.setAlignment(Pos.CENTER_LEFT);
 
         VBox offsetCard = new VBox(8,
@@ -95,7 +107,7 @@ public final class StereoPane implements ToolPane {
                 autoSolve);
         offsetCard.getStyleClass().add("steg-card");
 
-        HBox actionRow = new HBox(8, saveButton, copyButton);
+        FlowPane actionRow = new FlowPane(8, 6, saveButton, copyButton);
         actionRow.setAlignment(Pos.CENTER_LEFT);
 
         VBox actionCard = new VBox(8, new Label("Export & Save"), actionRow, hint);
@@ -103,7 +115,13 @@ public final class StereoPane implements ToolPane {
 
         VBox box = new VBox(10, offsetCard, actionCard);
         box.setPadding(new Insets(10));
-        return box;
+
+        ScrollPane scroll = new ScrollPane(box);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setPadding(new Insets(0));
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        return scroll;
     }
 
     @Override
