@@ -132,6 +132,12 @@ including archives and executables. The application therefore:
   executable,
 * saves payloads byte exactly and only where you explicitly ask.
 
+Malformed input is a first class concern rather than an afterthought: every parser reads through a
+bounds-checked accessor, and the test suite truncates each supported format at every length, corrupts
+single bytes and feeds random data behind valid signatures. See [SECURITY.md](SECURITY.md) for the
+threat model and for how to report a vulnerability privately (please do not open a public issue for a
+crash on a malformed file).
+
 ## License
 
 MIT — see [LICENSE](LICENSE). The original StegSolve by Caesum is MIT licensed as well; its

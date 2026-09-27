@@ -1,0 +1,64 @@
+name: Feature request
+description: Suggest a capability, a transform or an improvement
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        StegSolver deliberately stays small and focused: no plugin system, no dependency injection, no
+        database, no web framework. Requests that fit a steganography analysis workflow are very
+        welcome; requests that turn it into a general image editor or a framework probably are not.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that the application makes hard or impossible today?
+      placeholder: |
+        I keep receiving images where the payload uses a header of a few bytes and then a length, and I
+        have to work out the length by hand before I can carve the payload out.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: Describe the behaviour you want. A rough sketch is fine.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Existing features, other tools, or a manual workaround.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Transform / bit planes
+        - Data extraction
+        - Barcode and QR handling
+        - File structure analysis
+        - Stereogram solver
+        - Image combine
+        - Frame browser
+        - Viewport, zoom and navigation
+        - Packaging and distribution
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Please confirm what this request implies, so that its cost is clear.
+      options:
+        - label: It can work without adding a new runtime dependency
+        - label: It would keep the legacy transform numbering and extraction conventions unchanged
+        - label: I am willing to test a pull request for it

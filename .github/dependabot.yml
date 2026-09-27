@@ -1,0 +1,71 @@
+# Dependabot configuration.
+#
+# StegSolver has few dependencies, but they are security relevant: ZXing parses untrusted barcodes and
+# JavaFX is the whole user interface, so known vulnerabilities must reach a pull request quickly.
+#
+# Updates arrive as pull requests and therefore go through the same review and checks as any other
+# change: https://docs.github.com/code-security/dependabot/dependabot-version-updates
+
+version: 2
+updates:
+  # Maven dependencies: JavaFX, ZXing, JUnit, JMH and the build plugins.
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    labels:
+      - dependencies
+    groups:
+      # One pull request per coherent family instead of a dozen single version bumps.
+      javafx:
+        applies-to: version-updates
+        patterns:
+          - "org.openjfx:*"
+      testing:
+        applies-to: version-updates
+        patterns:
+          - "org.junit*:*"
+          - "org.openjdk.jmh:*"
+      build-plugins:
+        applies-to: version-updates
+        patterns:
+          - "org.apache.maven.plugins:*"
+          - "org.codehaus.mojo:*"
+      # Security updates are never grouped: each one deserves its own review and its own test run.
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  # Keep the GitHub Actions used by the workflows current, since they run with repository credentials.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+      include: scope
+    labels:
+      - dependencies
+      - ci
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"

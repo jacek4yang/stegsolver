@@ -15,6 +15,9 @@ tested and reviewed.
 * Never introduce a plugin system, a dependency injection framework, a database or a web framework.
 * Decoded payloads are untrusted: never execute, open, unpack or extract them, and never reconstruct
   payload bytes from decoded text (use `BYTE_SEGMENTS`).
+* Treat malformed input as the normal case in `parser/`: read through `ByteReader`, report a warning and
+  keep going, and add a truncation or corruption case to `FileAnalyzerTest` for whatever you touched.
+* Security problems are reported privately, not in a public issue; see [SECURITY.md](SECURITY.md).
 
 ## Workflow
 

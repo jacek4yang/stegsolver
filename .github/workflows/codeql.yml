@@ -1,0 +1,66 @@
+name: CodeQL
+
+# Static analysis for security and code quality problems.
+#
+# Java needs a build to be analysed, so the workflow compiles the application explicitly rather than
+# relying on autobuild: that keeps the JDK version and the Maven invocation identical to the other
+# workflows instead of depending on CodeQL's own toolchain discovery.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so that a new query pack finds problems in code that did not change.
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyse Java
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      # Needed to upload the results to code scanning.
+      security-events: write
+      # Needed to fetch the CodeQL query packs.
+      packages: read
+      actions: read
+      contents: read
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: java-kotlin
+          build-mode: manual
+          # security-and-quality is stricter than the default and suits an analysis tool that parses
+          # untrusted input.
+          queries: security-and-quality
+
+      - name: Build the application for analysis
+        run: mvn -B -ntp --no-transfer-progress -DskipTests -Dmaven.test.skip=true clean compile
+
+      - name: Perform the CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:java-kotlin"
