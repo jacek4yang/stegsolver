@@ -118,8 +118,11 @@ if ($LASTEXITCODE -ne 0) { throw 'jpackage failed' }
 
 Write-Host '==> Verifying the packaged application'
 if ($Type -eq 'app-image') {
+    # --version and --self-test both run without a display, so they work in continuous integration.
     & "$packageDir\$appName\$appName.exe" --version
     if ($LASTEXITCODE -ne 0) { throw 'The packaged application did not start' }
+    & "$packageDir\$appName\$appName.exe" --self-test
+    if ($LASTEXITCODE -ne 0) { throw 'The self test failed in the packaged application' }
 }
 
 Write-Host ''

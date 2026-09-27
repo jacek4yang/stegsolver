@@ -97,9 +97,7 @@ JPACKAGE_ARGS=(
   --java-options "-Xmx2g"
 )
 
-if [[ "$PACKAGE_TYPE" == "app-image" ]]; then
-  JPACKAGE_ARGS+=(--java-options "-Dstegsolver.userHome=$HOME")
-else
+if [[ "$PACKAGE_TYPE" != "app-image" ]]; then
   JPACKAGE_ARGS+=(--linux-shortcut --linux-menu-group "Graphics")
 fi
 
