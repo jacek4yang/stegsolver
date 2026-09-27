@@ -38,6 +38,26 @@ if ($packageVersion -notmatch '^[0-9]+(\.[0-9]+){0,2}$') {
 }
 
 $appName = 'StegSolver'
+
+<#
+.SYNOPSIS
+  Runs the packaged launcher and returns its exit code.
+
+.DESCRIPTION
+  jpackage produces a Windows GUI-subsystem executable. PowerShell's call operator does not wait for
+  GUI applications, so $LASTEXITCODE is meaningless for them - it either keeps the value of an earlier
+  command or is empty, which made the verification fail even though the application had run correctly.
+  Start-Process -Wait -PassThru waits for the real process and reports its exit code, and -NoNewWindow
+  keeps the launcher's console output attached.
+#>
+function Invoke-PackagedApp {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [string[]]$Arguments = @()
+    )
+    $process = Start-Process -FilePath $Executable -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
+    return $process.ExitCode
+}
 $mainClass = 'io.github.jacek4yang.stegsolver.Launcher'
 $platform = 'win'
 $javaModules = 'java.base,java.desktop,java.logging,java.xml,java.prefs,java.datatransfer,java.scripting,jdk.charsets'
@@ -119,10 +139,15 @@ if ($LASTEXITCODE -ne 0) { throw 'jpackage failed' }
 Write-Host '==> Verifying the packaged application'
 if ($Type -eq 'app-image') {
     # --version and --self-test both run without a display, so they work in continuous integration.
-    & "$packageDir\$appName\$appName.exe" --version
-    if ($LASTEXITCODE -ne 0) { throw 'The packaged application did not start' }
-    & "$packageDir\$appName\$appName.exe" --self-test
-    if ($LASTEXITCODE -ne 0) { throw 'The self test failed in the packaged application' }
+    $versionExit = Invoke-PackagedApp -Executable "$packageDir\$appName\$appName.exe" `
+        -Arguments @('--version')
+    if ($versionExit -ne 0) { throw "The packaged application did not start (exit code $versionExit)" }
+    $selfTestExit = Invoke-PackagedApp -Executable "$packageDir\$appName\$appName.exe" `
+        -Arguments @('--self-test')
+    if ($selfTestExit -ne 0) {
+        throw "The self test failed in the packaged application (exit code $selfTestExit)"
+    }
+    Write-Host '    the packaged application starts and passes the self test'
 }
 
 Write-Host ''

@@ -11,6 +11,10 @@
 
 set -euo pipefail
 
+# The script is invoked as ./packaging/package-linux.sh or as `bash packaging/package-linux.sh`; both
+# work, and `git update-index --chmod=+x` keeps the executable bit in the repository for the first form
+# even though it was originally committed from a Windows checkout.
+
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
