@@ -1,5 +1,11 @@
 # StegSolver
 
+[![CI](https://github.com/jacek4yang/stegsolver/actions/workflows/ci.yml/badge.svg)](https://github.com/jacek4yang/stegsolver/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/jacek4yang/stegsolver/actions/workflows/codeql.yml/badge.svg)](https://github.com/jacek4yang/stegsolver/actions/workflows/codeql.yml)
+[![Package](https://github.com/jacek4yang/stegsolver/actions/workflows/package.yml/badge.svg)](https://github.com/jacek4yang/stegsolver/actions/workflows/package.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Java 21](https://img.shields.io/badge/Java-21-orange.svg)](https://adoptium.net/temurin/releases/?version=21)
+
 A steganography analysis tool for images, rebuilt as a modern Java 21 / JavaFX desktop
 application.
 
@@ -93,7 +99,9 @@ option combination is compared against it byte for byte.
 ## Packaging
 
 Both scripts produce a self contained application (Java 21 runtime + JavaFX inside it) that needs
-nothing installed on the user's machine:
+nothing installed on the user's machine. Ready-to-run builds can be taken from the artifacts of the
+[Package](../../actions/workflows/package.yml) workflow; pushing a `v*` tag builds them and attaches
+them to a release:
 
 ```bash
 packaging/package-linux.sh                 # Linux Mint / Debian: app-image by default
