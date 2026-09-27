@@ -69,7 +69,7 @@ public final class StegSolverApp extends Application {
      */
     private void runSmokeTest() {
         int steps = Integer.getInteger("stegsolver.smokeSteps", 8);
-        double stepMillis = Double.parseDouble(System.getProperty("stegsolver.smokeStepMillis", "120"));
+        double stepMillis = doubleProperty("stegsolver.smokeStepMillis", 120);
         javafx.animation.Timeline timeline = new javafx.animation.Timeline();
         timeline.getKeyFrames().add(new javafx.animation.KeyFrame(Duration.millis(stepMillis), event -> {
             if (window.document().isOpen()) {
@@ -79,7 +79,7 @@ public final class StegSolverApp extends Application {
         timeline.setCycleCount(Math.max(1, steps));
         // The transforms are rendered in the background, so give the last one time to appear before the
         // smoke test inspects (or screenshots) the window.
-        double settleMillis = Double.parseDouble(System.getProperty("stegsolver.smokeSettleMillis", "900"));
+        double settleMillis = doubleProperty("stegsolver.smokeSettleMillis", 900);
         timeline.setOnFinished(event -> {
             javafx.animation.PauseTransition settle =
                     new javafx.animation.PauseTransition(Duration.millis(settleMillis));
@@ -103,8 +103,7 @@ public final class StegSolverApp extends Application {
             scannedOnce = true;
             window.scanRegion(null, false);
             javafx.animation.PauseTransition wait = new javafx.animation.PauseTransition(
-                    Duration.millis(Double.parseDouble(System.getProperty("stegsolver.smokeScanMillis",
-                            "2000"))));
+                    Duration.millis(doubleProperty("stegsolver.smokeScanMillis", 2000)));
             wait.setOnFinished(event -> finishSmokeTest(steps));
             wait.play();
             return;
@@ -145,6 +144,27 @@ public final class StegSolverApp extends Application {
                     + ") centre=" + Integer.toHexString(pixels[(height / 2) * width + width / 2]));
         } catch (Exception e) {
             System.err.println("Node snapshot failed: " + e);
+        }
+    }
+
+    /**
+     * Reads a numeric developer switch, falling back to {@code fallback} when the property is absent or
+     * not a number.
+     *
+     * <p>These properties only tune the smoke test ({@code -Dstegsolver.smokeStepMillis=...}), so a typo
+     * must not take the application down with an unhandled {@link NumberFormatException}; the value that
+     * had to be ignored is reported instead.</p>
+     */
+    private static double doubleProperty(String name, double fallback) {
+        String value = System.getProperty(name);
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException e) {
+            System.err.println("Ignoring " + name + "='" + value + "': not a number, using " + fallback);
+            return fallback;
         }
     }
 

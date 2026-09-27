@@ -201,6 +201,11 @@ final class PngAnalyzer {
         report.field("IDAT chunks", idatChunks);
         report.field("IDAT payload", idatBytes + " bytes of compressed data");
         report.field("Last chunk", lastType.isEmpty() ? "(none)" : lastType);
+        report.field("Palette (PLTE)", sawPlte ? "present" : "absent");
+        if (!sawPlte) {
+            report.note("No PLTE chunk: correct for truecolour and grayscale images, a problem for an "
+                    + "indexed (colour type 3) image");
+        }
         if (!sawIhdr) {
             report.warn("No IHDR chunk found — this is not a well formed PNG stream");
         }
