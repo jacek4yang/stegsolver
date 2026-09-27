@@ -74,10 +74,17 @@ Interactive features worth knowing about:
 ## Testing and benchmarks
 
 ```bash
-mvn -B -ntp verify          # unit and integration tests
-scripts/bench.sh            # JMH benchmarks (see src/bench/java for the list)
+mvn -B -ntp verify                              # unit and integration tests
+mvn -B -ntp -Pself-test exec:exec               # run every engine layer once, no display needed
+mvn -B -ntp -Pself-test exec:exec -q            # same, quiet output
+scripts/bench.sh                                # JMH benchmarks (see src/bench/java for the list)
 mvn -B -ntp -Pbench test-compile exec:exec -Dbench.include=TransformBenchmark -Dbench.size=4096
 ```
+
+The self test is the fastest way to check that a checkout (or a packaged build, see
+`--self-test` under [Packaging](#packaging)) actually works: it runs the transform catalog, the bulk
+pixel operations, the extraction, the stereogram solver, all 13 combine modes, the barcode scanner, the
+file analysis and the lazy frame reader in one go and fails the build if any layer fails.
 
 The test suite includes a legacy parity oracle: `LegacyReference` (test sources) transcribes the
 original StegSolve algorithms, and every transform, combine mode, stereogram offset and extraction

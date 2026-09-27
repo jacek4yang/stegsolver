@@ -29,6 +29,7 @@ tested and reviewed.
 
 ```bash
 mvn -B -ntp verify                 # compile + all tests
+mvn -B -ntp -Pself-test exec:exec  # run every engine layer once (no display needed)
 scripts/run.sh                     # run the application from sources
 scripts/run.sh --smoke             # start, render a few transforms, exit (quick sanity check)
 scripts/run.sh suspicious.png
@@ -48,6 +49,9 @@ launcher, which is also the way to test a change interactively without packaging
   and garbage cases.
 * Legacy parity tests compare against `LegacyReference`, a transcription of the original algorithms.
   Add a case there rather than hard coding an expected array.
+* If you add an engine layer, extend `selfcheck.SelfTest` so that the headless check (and therefore
+  continuous integration) notices when it breaks. Keep the step's output short and informative: it is
+  read by a human when something fails.
 
 ## Benchmarks
 
@@ -63,6 +67,24 @@ mvn -B -ntp -Pbench test-compile exec:exec -Dbench.include=AnalysisBenchmark
 Update the numbers in a pull request description when you change a hot path: transform computation,
 extraction, combination and barcode scanning are the paths that decide whether the application feels
 instant.
+
+## Pull requests
+
+`main` is protected: every change goes through a pull request that must pass the required checks
+(`Build and test` on Linux and Windows, and the Xvfb smoke test). Direct pushes to `main` are
+rejected, including for maintainers, because a rule that only applies to some contributors is a rule
+nobody trusts.
+
+Please keep a pull request:
+
+* **focused** — one behaviour change, one PR; split unrelated cleanups into their own branch,
+* **documented** — what changes for the user, which tests cover it and whether legacy parity is
+  affected,
+* **green** — run `mvn -B -ntp verify` and `mvn -B -ntp -Pself-test exec:exec` locally first; the
+  checks the CI runs are exactly those two plus the benchmark compile and the Swing guard.
+
+Use `Fixes #123` in the description to close an issue automatically, and prefer a merge commit so the
+branch history stays readable.
 
 ## Packaging
 

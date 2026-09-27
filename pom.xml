@@ -241,6 +241,38 @@
       </build>
     </profile>
 
+    <!-- ============ headless self test ============ -->
+    <!-- mvn -Pself-test exec:exec                                                     -->
+    <!-- Runs every engine layer once (transforms, extraction, stereogram solver,      -->
+    <!-- combine modes, barcode scan, file analysis, frame reading) in a forked JVM    -->
+    <!-- and fails the build if any step fails. Deliberately invoked as a goal rather  -->
+    <!-- than bound to a phase so it never slows down a normal build, and deliberately -->
+    <!-- not written in shell so that it behaves identically on Windows and Linux.     -->
+    <profile>
+      <id>self-test</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>${exec.plugin.version}</version>
+            <configuration>
+              <executable>${java.home}/bin/java</executable>
+              <classpathScope>runtime</classpathScope>
+              <arguments>
+                <argument>-Djava.awt.headless=true</argument>
+                <argument>-Dfile.encoding=UTF-8</argument>
+                <argument>-classpath</argument>
+                <classpath/>
+                <argument>${main.class}</argument>
+                <argument>--self-test</argument>
+              </arguments>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
     <!-- ============ JMH benchmarks ============ -->
     <!-- The benchmarks live in src/bench/java so that the normal build never compiles them. -->
     <!-- mvn -Pbench test-compile exec:exec                                         -->
