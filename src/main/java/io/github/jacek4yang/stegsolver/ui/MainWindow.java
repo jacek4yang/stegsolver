@@ -187,7 +187,7 @@ public final class MainWindow implements PreviewHost {
         toolDock.getStyleClass().add("steg-tool-dock");
         toolDock.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         toolDock.setMinWidth(320);
-        toolDock.setPrefWidth(400);
+        toolDock.setPrefWidth(420);
         for (ToolPane pane : panes) {
             Tab tab = new Tab(pane.title(), pane.content());
             tab.setClosable(false);
@@ -792,7 +792,7 @@ public final class MainWindow implements PreviewHost {
             }
             barcodePane.addResults(result, true);
             if (!result.isEmpty()) {
-                status("Background scan: " + result.summary() + " - see the Barcode tab");
+                status("Background scan: " + result.count() + " symbol(s) found, see the Barcode tab");
                 updateBarcodeBadge(result);
             }
         }, error -> {
