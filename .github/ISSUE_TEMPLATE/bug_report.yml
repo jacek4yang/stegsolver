@@ -1,0 +1,79 @@
+name: Bug report
+description: Something behaves incorrectly, crashes or produces a wrong result
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For a **security** issue (a crash on a malformed file, out of bounds
+        access, resource exhaustion, or anything about how decoded payloads are handled) please use
+        [private vulnerability reporting](https://github.com/jacek4yang/stegsolver/security/advisories/new)
+        instead of this form.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you see, and what did you expect instead?
+      placeholder: |
+        Opening a GIF with three frames shows the frame browser tab as empty. I expected three
+        thumbnails.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. A minimal reproducer is worth more than a long description.
+      placeholder: |
+        1. Open animation.gif
+        2. Click the Frames tab
+        3. Nothing is listed
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: StegSolver version
+      description: Contents of the About dialog, the window title, or `stegsolver --version`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows 11
+        - Linux Mint / Debian (X11)
+        - Other Linux (X11)
+        - Linux (Wayland)
+        - macOS
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: java
+    attributes:
+      label: Java version
+      description: Only needed when running from sources. `java -version`, or the version shown in the About dialog.
+      placeholder: '21.0.2 (not needed for a packaged build)'
+
+  - type: textarea
+    id: self-test
+    attributes:
+      label: Self test output
+      description: |
+        Optional but very helpful. Run `stegsolver --self-test` (or `mvn -B -ntp -Pself-test exec:exec`
+        from sources) and paste the table. It shows which engine layer is unhappy.
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output
+      description: Paste any stack trace or message from the console. This will be rendered as a code block.
+      render: text

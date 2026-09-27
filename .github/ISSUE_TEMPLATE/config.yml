@@ -1,0 +1,17 @@
+# Issue template chooser configuration.
+# https://docs.github.com/communities/using-templates-to-encourage-useful-issues-and-pull-requests
+
+blank_issues_enabled: false
+
+contact_links:
+  - name: Security issue
+    url: https://github.com/jacek4yang/stegsolver/security/advisories/new
+    about: Report a crash on a malformed file, out of bounds access or a payload handling problem privately.
+
+  - name: Question or how-to
+    url: https://github.com/jacek4yang/stegsolver/discussions
+    about: Ask how to use StegSolver for a specific puzzle or file.
+
+  - name: How the code is organised
+    url: https://github.com/jacek4yang/stegsolver/blob/main/docs/architecture.md
+    about: Layering, threading and the reasoning behind the design, before filing a request.

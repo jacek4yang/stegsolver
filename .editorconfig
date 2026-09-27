@@ -1,0 +1,35 @@
+# EditorConfig: https://editorconfig.org
+#
+# The repository normalises line endings through .gitattributes; this file makes editors agree before
+# the file is even written, which keeps diffs free of whitespace noise.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+max_line_length = 110
+
+[*.{yml,yaml,json,jsonc}]
+indent_size = 2
+
+[*.{xml,pom}]
+indent_size = 2
+
+[*.md]
+# Trailing spaces are meaningful in Markdown (they force a line break).
+trim_trailing_whitespace = false
+indent_size = 2
+
+[*.{bat,cmd,ps1}]
+end_of_line = crlf
+
+[*.sh]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
