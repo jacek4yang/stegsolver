@@ -88,6 +88,29 @@ the same check is available as `mvn -B -ntp -Pself-test exec:exec`.
 The GUI smoke test is what the CI packaging workflow uses to prove that a built artifact really starts
 and renders, rather than only that it was produced.
 
+### Scripting the packaged launcher
+
+`jpackage` produces a **Windows GUI-subsystem** executable. PowerShell's call operator does not wait for
+GUI applications, so this does not work:
+
+```powershell
+# WRONG: $LASTEXITCODE is not set by a GUI application, so the check fires even on success
+& target\dist\packages\StegSolver\StegSolver.exe --version
+if ($LASTEXITCODE -ne 0) { throw 'failed' }
+```
+
+Use `Start-Process -Wait -PassThru`, which waits for the process and reports its real exit code:
+
+```powershell
+$process = Start-Process -FilePath $launcher -ArgumentList @('--self-test') -Wait -PassThru -NoNewWindow
+if ($process.ExitCode -ne 0) { throw "self test failed ($($process.ExitCode))" }
+```
+
+Both the packaging script and the CI verification do this. On Linux the launcher is an ordinary
+executable and shells wait for it normally, so `$?` is reliable; the shell scripts are also stored with
+the executable bit set (`git update-index --chmod=+x`) so that `./packaging/package-linux.sh` works from
+a fresh clone.
+
 ## Platform notes
 
 * **Windows 11** — `app-image` verified, including starting the GUI from a copy of the artifact in an

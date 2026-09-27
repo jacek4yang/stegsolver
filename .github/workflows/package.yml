@@ -26,8 +26,10 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # Invoked through bash explicitly: the repository does record the executable bit, but a workflow
+      # should not depend on a file mode surviving every checkout and archive round trip.
       - name: Build the application image
-        run: packaging/package-linux.sh --skip-tests
+        run: bash packaging/package-linux.sh --skip-tests
 
       - name: Verify the runtime image contains JavaFX
         run: |
@@ -81,11 +83,24 @@ jobs:
       - name: Verify the packaged launcher starts
         shell: pwsh
         run: |
-          & target\dist\packages\StegSolver\StegSolver.exe --version
-          if ($LASTEXITCODE -ne 0) { throw 'The packaged launcher failed' }
+          # jpackage produces a GUI-subsystem executable, and PowerShell's call operator does not wait
+          # for those, so $LASTEXITCODE cannot be trusted here. Start-Process -Wait -PassThru waits for
+          # the real process and returns its exit code.
+          function Invoke-PackagedApp {
+              param([string]$Executable, [string[]]$Arguments = @())
+              $process = Start-Process -FilePath $Executable -ArgumentList $Arguments -Wait `
+                  -PassThru -NoNewWindow
+              return $process.ExitCode
+          }
+          $launcher = 'target\dist\packages\StegSolver\StegSolver.exe'
+          $versionExit = Invoke-PackagedApp -Executable $launcher -Arguments @('--version')
+          if ($versionExit -ne 0) { throw "The packaged launcher failed (exit code $versionExit)" }
           # The self test runs every engine layer through the bundled runtime.
-          & target\dist\packages\StegSolver\StegSolver.exe --self-test
-          if ($LASTEXITCODE -ne 0) { throw 'The self test failed in the packaged application' }
+          $selfTestExit = Invoke-PackagedApp -Executable $launcher -Arguments @('--self-test')
+          if ($selfTestExit -ne 0) {
+              throw "The self test failed in the packaged application (exit code $selfTestExit)"
+          }
+          Write-Host 'The packaged launcher starts and passes the self test.'
 
       - name: Package the artifact
         shell: pwsh
