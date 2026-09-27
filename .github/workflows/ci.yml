@@ -16,13 +16,18 @@ concurrency:
 
 jobs:
   build:
-    name: Build and test (${{ matrix.os }})
+    name: Build and test (${{ matrix.check }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest]
+        # Keep the existing protected-branch check names while pinning the Linux runner.
+        include:
+          - os: ubuntu-22.04
+            check: ubuntu-latest
+          - os: windows-latest
+            check: windows-latest
 
     steps:
       - name: Check out the repository
