@@ -62,7 +62,7 @@ jobs:
         run: mvn -B -ntp --no-transfer-progress -Pself-test exec:exec
 
       - name: Prepare display integration tests
-        run: mvn -B -ntp test-compile dependency:build-classpath -Dmdep.outputFile=target/test-cp.txt -Dmdep.includeScope=test
+        run: mvn -B -ntp test-compile dependency:build-classpath '-Dmdep.outputFile=target/test-cp.txt' '-Dmdep.includeScope=test'
 
       - name: Test UI and screen capture on X11
         if: runner.os == 'Linux'
