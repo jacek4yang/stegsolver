@@ -55,10 +55,10 @@ jobs:
       - name: Compile the benchmarks
         run: mvn -B -ntp --no-transfer-progress -Pbench test-compile
 
+      # Runs every engine layer in a forked JVM through Maven, so the step needs no shell syntax and
+      # behaves identically on Windows and Linux.
       - name: Run the engine self test (no display needed)
-        run: |
-          mvn -B -ntp --no-transfer-progress -q dependency:build-classpath             -Dmdep.outputFile=target/cp.txt -Dmdep.includeScope=runtime
-          java -Djava.awt.headless=true -cp "target/classes:$(cat target/cp.txt)"             io.github.jacek4yang.stegsolver.Launcher --self-test
+        run: mvn -B -ntp --no-transfer-progress -Pself-test exec:exec
 
       - name: Upload the test reports
         if: always()

@@ -81,8 +81,12 @@ $env:JAVA_TOOL_OPTIONS = '-Dstegsolver.smokeTest=true'
 & target\dist\packages\StegSolver\StegSolver.exe image.png
 ```
 
-The smoke test is what the CI packaging workflow uses to prove that a built artifact really starts,
-rather than only that it was produced.
+`--self-test` runs every engine layer through the bundled runtime and exits non-zero if anything
+fails. It needs no display, so it also works over SSH and in container builds. From a source checkout
+the same check is available as `mvn -B -ntp -Pself-test exec:exec`.
+
+The GUI smoke test is what the CI packaging workflow uses to prove that a built artifact really starts
+and renders, rather than only that it was produced.
 
 ## Platform notes
 
