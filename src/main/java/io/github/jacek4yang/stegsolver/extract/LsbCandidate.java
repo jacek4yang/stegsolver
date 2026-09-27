@@ -161,20 +161,20 @@ public record LsbCandidate(
             }
         }
         if (selectedPlanes.size() == 1) {
-            parts.add("bit " + selectedPlanes.get(0));
+            parts.add("b" + selectedPlanes.get(0));
         } else if (!selectedPlanes.isEmpty()) {
-            parts.add("bits " + selectedPlanes.stream().map(String::valueOf).collect(Collectors.joining(",")));
+            parts.add("b" + selectedPlanes.stream().map(String::valueOf).collect(Collectors.joining(",")));
         }
 
         // 3. Traversal component
-        parts.add(options.rowFirst() ? "Row-major" : "Column-major");
+        parts.add(options.rowFirst() ? "Row" : "Col");
 
         // 4. Bit order component
-        parts.add(options.lsbFirst() ? "LSB first" : "MSB first");
+        parts.add(options.lsbFirst() ? "LSB" : "MSB");
 
         // 5. Inversion component
         if (options.invertBits()) {
-            parts.add("inverted");
+            parts.add("Inverted");
         }
 
         return String.join(" \u00b7 ", parts);

@@ -14,9 +14,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,12 +38,13 @@ public final class AutoLsbScanner {
     private static final Pattern CTF_FLAG_PATTERN = Pattern.compile(
             "(?i)(?:flag|ctf|steg|key|secret|pico|htb|thm)\\{[\\x20-\\x7e]{1,128}\\}");
 
-    /** Single-thread executor for background scanning to avoid thread starvation. */
-    private static final ExecutorService SCAN_EXECUTOR = Executors.newCachedThreadPool(r -> {
+    /** One active scan and at most one pending scan. Cancelled work is removed from the queue. */
+    private static final ThreadPoolExecutor SCAN_EXECUTOR = new ThreadPoolExecutor(1, 1, 0L,
+            TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(1), r -> {
         Thread thread = new Thread(r, "stegsolver-auto-lsb-scan");
         thread.setDaemon(true);
         return thread;
-    });
+    }, new ThreadPoolExecutor.DiscardOldestPolicy());
 
     private AutoLsbScanner() {
     }
@@ -361,13 +363,18 @@ public final class AutoLsbScanner {
                 return new Evaluation(100, "ELF executable / shared object header");
             }
             case PE -> {
-                return new Evaluation(100, "Windows PE executable header");
+                if (hasPeHeader(data)) {
+                    return new Evaluation(100, "Windows PE executable header");
+                }
+                return new Evaluation(65, "Possible MZ header (PE signature not verified)");
             }
             case JAVA_CLASS -> {
                 return new Evaluation(100, "Java class bytecode (0xCAFEBABE)");
             }
             case BASE64_TEXT -> {
-                return new Evaluation(85, "Base64 encoded text");
+                return data.length >= 24
+                        ? new Evaluation(72, "Base64 alphabet and length match")
+                        : new Evaluation(45, "Short possible Base64 text");
             }
             case TEXT_ASCII, TEXT_UTF8 -> {
                 return evaluateText(data, type == PayloadType.TEXT_ASCII);
@@ -457,6 +464,15 @@ public final class AutoLsbScanner {
         return data.length >= 2 && data[0] == '#' && data[1] == '!';
     }
 
+    private static boolean hasPeHeader(byte[] data) {
+        if (data.length < 64) return false;
+        long offset = (data[0x3c] & 0xffL) | ((data[0x3d] & 0xffL) << 8)
+                | ((data[0x3e] & 0xffL) << 16) | ((data[0x3f] & 0xffL) << 24);
+        return offset <= data.length - 4 && data[(int) offset] == 'P'
+                && data[(int) offset + 1] == 'E' && data[(int) offset + 2] == 0
+                && data[(int) offset + 3] == 0;
+    }
+
     private static boolean isJsonStructure(byte[] data) {
         if (data.length < 2) return false;
         int idx = 0;
@@ -509,6 +525,7 @@ public final class AutoLsbScanner {
                 cancelled = true;
                 if (future != null) {
                     future.cancel(true);
+                    SCAN_EXECUTOR.remove((Runnable) future);
                 }
             }
 
@@ -532,7 +549,11 @@ public final class AutoLsbScanner {
                         LsbCandidate candidate = evaluateCandidate(image, region, opt, SCAN_PREFIX_LIMIT);
                         completed++;
 
-                        String fp = candidate.fingerprint();
+                        // A matching bounded prefix does not prove matching full payloads. Only
+                        // collapse byte-identical *complete* extracts of the same length.
+                        String fp = candidate.truncated()
+                                ? candidate.fingerprint() + ":" + candidate.totalBytes() + ":" + opt
+                                : candidate.fingerprint() + ":" + candidate.totalBytes();
                         LsbCandidate existing = deduplicated.get(fp);
                         boolean accepted = false;
 
@@ -549,7 +570,7 @@ public final class AutoLsbScanner {
                         }
 
                         // Send progress update
-                        if (completed % 8 == 0 || completed == total || accepted) {
+                        if (completed % 8 == 0 || completed == total) {
                             final int currentCompleted = completed;
                             final int matches = deduplicated.size();
                             listener.onProgress(currentCompleted, total, matches);
@@ -579,5 +600,10 @@ public final class AutoLsbScanner {
         Task task = new Task();
         task.future = SCAN_EXECUTOR.submit(task);
         return task;
+    }
+
+    /** Stop the scan worker when the application closes. */
+    public static void shutdown() {
+        SCAN_EXECUTOR.shutdownNow();
     }
 }

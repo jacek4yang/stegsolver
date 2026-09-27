@@ -31,6 +31,10 @@ class AutoLsbScannerTest {
     void fastScanBoundedCandidateCount() {
         List<ExtractionOptions> rgbOnly = AutoLsbScanner.fastScanOptions(false);
         List<ExtractionOptions> withAlpha = AutoLsbScanner.fastScanOptions(true);
+        assertEquals(118, rgbOnly.size());
+        assertEquals(130, withAlpha.size());
+        assertEquals(rgbOnly.size(), rgbOnly.stream().distinct().count());
+        assertEquals(withAlpha.size(), withAlpha.stream().distinct().count());
 
         assertTrue(rgbOnly.size() >= 50 && rgbOnly.size() <= 200,
                 () -> "Fast Scan (RGB) must be bounded: was " + rgbOnly.size());
@@ -45,6 +49,10 @@ class AutoLsbScannerTest {
     void deepScanBoundedCandidateCount() {
         List<ExtractionOptions> deep = AutoLsbScanner.deepScanOptions(false);
         List<ExtractionOptions> fast = AutoLsbScanner.fastScanOptions(false);
+        assertEquals(158, deep.size());
+        assertEquals(170, AutoLsbScanner.deepScanOptions(true).size());
+        assertEquals(deep.size(), deep.stream().distinct().count());
+        assertEquals(170, AutoLsbScanner.deepScanOptions(true).stream().distinct().count());
 
         assertTrue(deep.size() > fast.size(), "Deep Scan must cover more combinations than Fast Scan");
         assertTrue(deep.size() <= 500, () -> "Deep Scan must remain bounded: was " + deep.size());
@@ -212,6 +220,20 @@ class AutoLsbScannerTest {
     }
 
     @Test
+    @DisplayName("Matching bounded prefixes must retain distinct full extractions")
+    void truncatedPrefixesDoNotCollapseConfigurations() throws Exception {
+        ImageData image = TestImages.solid(1024, 1024, 0xff000000);
+        List<LsbCandidate> results = runScan(image, false);
+        ExtractionOptions rgb = ExtractionOptions.none()
+                .with(Channel.RED, 0, true).with(Channel.GREEN, 0, true)
+                .with(Channel.BLUE, 0, true).withOrder(RgbOrder.RGB)
+                .withRowFirst(true).withLsbFirst(true);
+        ExtractionOptions bgr = rgb.withOrder(RgbOrder.BGR);
+        assertTrue(results.stream().anyMatch(c -> c.options().equals(rgb) && c.truncated()));
+        assertTrue(results.stream().anyMatch(c -> c.options().equals(bgr) && c.truncated()));
+    }
+
+    @Test
     @DisplayName("Cancellation promptly terminates background scanning")
     void cancellationBehavior() throws Exception {
         ImageData largeImage = TestImages.randomRgb(300, 300, 999);
@@ -259,7 +281,7 @@ class AutoLsbScannerTest {
                 .withOrder(RgbOrder.RGB)
                 .withRowFirst(true)
                 .withLsbFirst(true);
-        assertEquals("RGB \u00b7 bit 0 \u00b7 Row-major \u00b7 LSB first", LsbCandidate.formatConfig(opt1));
+        assertEquals("RGB \u00b7 b0 \u00b7 Row \u00b7 LSB", LsbCandidate.formatConfig(opt1));
 
         ExtractionOptions opt2 = ExtractionOptions.none()
                 .with(Channel.BLUE, 0, true)
@@ -272,7 +294,7 @@ class AutoLsbScannerTest {
                 .withRowFirst(false)
                 .withLsbFirst(false)
                 .withInvertBits(true);
-        assertEquals("BGR \u00b7 bits 0,1 \u00b7 Column-major \u00b7 MSB first \u00b7 inverted",
+        assertEquals("BGR \u00b7 b0,1 \u00b7 Col \u00b7 MSB \u00b7 Inverted",
                 LsbCandidate.formatConfig(opt2));
     }
 

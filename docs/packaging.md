@@ -40,7 +40,7 @@ The plain launcher starts JavaFX using the packaged runtime. The standalone jar 
 use the source run scripts with dependencies, or the bundled application image.
 
 **Version handling.** `jpackage` accepts only numeric versions, so a development version such as
-`1.0.0-SNAPSHOT` is packaged as `1.0.0`; both scripts derive that automatically and refuse to guess
+`1.1.0-SNAPSHOT` is packaged as `1.1.0`; both scripts derive that automatically and refuse to guess
 if the version has no numeric prefix.
 
 **Installers.** `--type app-image` needs nothing extra and produces a self contained folder. `deb`

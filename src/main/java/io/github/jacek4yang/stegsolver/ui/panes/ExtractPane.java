@@ -83,6 +83,8 @@ public final class ExtractPane implements ToolPane {
     private final TextArea candidatePreviewArea = new TextArea();
 
     private AutoLsbScanner.ScanTask activeScanTask;
+    private ImageData candidateImage;
+    private Roi candidateRegion;
     private int scanSequence;
 
     // =============================================================== Manual Extraction Controls
@@ -232,6 +234,7 @@ public final class ExtractPane implements ToolPane {
         candidateSizeBadge.getStyleClass().addAll("steg-badge");
 
         candidateConfigLabel.getStyleClass().addAll("mono", "steg-transform-label");
+        candidateConfigLabel.setWrapText(true);
         candidateReasonLabel.setWrapText(true);
         candidateReasonLabel.getStyleClass().add("steg-hint");
 
@@ -382,6 +385,7 @@ public final class ExtractPane implements ToolPane {
     private static Label section(String title) {
         Label header = new Label(title);
         header.getStyleClass().add("steg-card-header");
+        header.setWrapText(true);
         return header;
     }
 
@@ -398,6 +402,8 @@ public final class ExtractPane implements ToolPane {
         final int sequence = ++scanSequence;
         boolean deep = deepScanBox.isSelected();
         Roi region = targetRegion(image);
+        candidateImage = image;
+        candidateRegion = region;
 
         autoScanButton.setDisable(true);
         cancelScanButton.setDisable(false);
@@ -441,6 +447,7 @@ public final class ExtractPane implements ToolPane {
             public void onFinished(List<LsbCandidate> allRanked) {
                 Platform.runLater(() -> {
                     if (sequence != scanSequence) return;
+                    activeScanTask = null;
                     candidateList.setAll(allRanked);
                     if (!candidateList.isEmpty()) {
                         candidateTable.getSelectionModel().selectFirst();
@@ -460,6 +467,7 @@ public final class ExtractPane implements ToolPane {
             public void onError(Throwable error) {
                 Platform.runLater(() -> {
                     if (sequence != scanSequence) return;
+                    activeScanTask = null;
                     autoScanButton.setDisable(false);
                     cancelScanButton.setDisable(true);
                     scanProgress.setVisible(false);
@@ -472,6 +480,7 @@ public final class ExtractPane implements ToolPane {
     }
 
     private void cancelAutoScan() {
+        scanSequence++;
         if (activeScanTask != null && !activeScanTask.isCancelled()) {
             activeScanTask.cancel();
             scanStatusLabel.setText("Scan cancelled.");
@@ -480,6 +489,7 @@ public final class ExtractPane implements ToolPane {
             scanProgress.setVisible(false);
             scanProgress.setManaged(false);
         }
+        activeScanTask = null;
     }
 
     private void showCandidateDetails(LsbCandidate candidate) {
@@ -544,10 +554,9 @@ public final class ExtractPane implements ToolPane {
 
     private void saveCandidatePayload(LsbCandidate candidate) {
         if (candidate == null) return;
-        ImageData image = window.displayedImage();
-        if (image == null) return;
-
-        Roi region = targetRegion(image);
+        ImageData image = candidateImage;
+        Roi region = candidateRegion;
+        if (image == null || region == null) return;
         String ext = candidate.payloadInfo().suggestedExtension();
         String defaultExt = ext.isEmpty() ? "bin" : ext;
         String suggested = (window.document().isOpen() ? window.document().fileName() + "-auto" : "auto-extract")
@@ -791,6 +800,8 @@ public final class ExtractPane implements ToolPane {
         preview.clear();
         signatureLabel.setText("");
         candidateList.clear();
+        candidateImage = null;
+        candidateRegion = null;
         candidateDetailBox.setVisible(false);
         candidateDetailBox.setManaged(false);
         scanStatusLabel.setText("Scan image for hidden LSB data across common CTF configurations.");
@@ -800,6 +811,12 @@ public final class ExtractPane implements ToolPane {
 
     /** Called when the viewport selection changes. */
     public void onSelectionChanged(Roi selection) {
+        if (candidateImage != null && !targetRegion(candidateImage).equals(candidateRegion)) {
+            cancelAutoScan();
+            candidateList.clear();
+            candidateImage = null;
+            candidateRegion = null;
+        }
         boolean hasSelection = selection != null && selection.isNotEmpty();
         useSelection.setDisable(!hasSelection);
         if (!hasSelection && useSelection.isSelected()) {
@@ -885,6 +902,7 @@ public final class ExtractPane implements ToolPane {
     @Override
     public void dispose() {
         cancelAutoScan();
+        AutoLsbScanner.shutdown();
         runner.close();
     }
 
