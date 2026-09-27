@@ -293,7 +293,7 @@ public final class BarcodeScanner {
                     points.add(mapBack(point.getX(), point.getY(), attempt));
                 }
             }
-            Roi bounds = boundsOf(points, attempt);
+            Roi bounds = boundsOf(points);
 
             Map<String, String> metadata = describeMetadata(result, segments);
             PayloadInfo payloadInfo = PayloadDetector.detect(payload, result.getText());
@@ -321,7 +321,8 @@ public final class BarcodeScanner {
             return new RotationMapper.Point(unscaled.x() + area.x(), unscaled.y() + area.y());
         }
 
-        private Roi boundsOf(List<RotationMapper.Point> points, BitmapAttempt attempt) {
+        /** Bounding box of the symbol's corner points, in original image coordinates. */
+        private Roi boundsOf(List<RotationMapper.Point> points) {
             if (points.isEmpty()) {
                 return area;
             }
