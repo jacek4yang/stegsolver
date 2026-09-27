@@ -43,8 +43,6 @@ import java.util.Map;
  */
 public final class BarcodeScanner {
 
-    /** Distance below which two hits with the same content are considered the same symbol. */
-    private static final double DUPLICATE_DISTANCE_PX = 12;
     /** Largest side beyond which a full scan copy is downscaled for the deep fallback pass. */
     private static final int DOWNSCALE_THRESHOLD_PX = 2600;
     /** Largest side below which a full scan copy is upscaled for the deep fallback pass. */
@@ -276,54 +274,9 @@ public final class BarcodeScanner {
         }
 
         private void add(Result result, BitmapAttempt attempt, String description, boolean inverted) {
-            BarcodeHit hit = toHit(result, attempt, description, inverted);
-            for (int i = 0; i < hits.size(); i++) {
-                BarcodeHit existing = hits.get(i);
-                if (!describesSameSymbol(existing, hit)) {
-                    continue;
-                }
-                boolean existingLocated = !existing.points().isEmpty();
-                boolean candidateLocated = !hit.points().isEmpty();
-                if (candidateLocated && !existingLocated) {
-                    // A located hit is strictly more useful than one that decoded without positions.
-                    hits.set(i, hit);
-                } else if (!candidateLocated && existingLocated) {
-                    // Keep the located one.
-                } else if (hit.payloadSize() > existing.payloadSize()) {
-                    // A merged Structured Append symbol carries more bytes than a single part.
-                    hits.set(i, hit);
-                }
-                return;
-            }
-            hits.add(hit);
-        }
-
-        /** True when two hits describe the same symbol: same content and the same place. */
-        private boolean describesSameSymbol(BarcodeHit existing, BarcodeHit candidate) {
-            if (existing.format() != candidate.format()) {
-                return false;
-            }
-            String existingContent = contentKey(existing);
-            String candidateContent = contentKey(candidate);
-            if (existingContent.isEmpty() || !existingContent.equals(candidateContent)) {
-                return false;
-            }
-            // A decode without any result points (pure barcode mode, and some readers) covers the whole
-            // scanned area, so it cannot be located and has to be treated as overlapping everything with
-            // the same content.
-            if (existing.points().isEmpty() || candidate.points().isEmpty()) {
-                return true;
-            }
-            double dx = existing.bounds().x() - candidate.bounds().x();
-            double dy = existing.bounds().y() - candidate.bounds().y();
-            return Math.hypot(dx, dy) <= DUPLICATE_DISTANCE_PX;
-        }
-
-        private String contentKey(BarcodeHit hit) {
-            if (hit.hasBinaryPayload()) {
-                return PayloadDetector.sha256(hit.payload());
-            }
-            return hit.text() == null ? "" : hit.text();
+            // Duplicate handling (the same symbol found by several passes) lives in HitMerge so that the
+            // user interface can apply exactly the same rule when results from several scans are combined.
+            HitMerge.add(hits, toHit(result, attempt, description, inverted));
         }
 
         private BarcodeHit toHit(Result result, BitmapAttempt attempt, String description, boolean inverted) {

@@ -1,0 +1,93 @@
+name: Package
+
+# Builds the self contained applications (bundled Java 21 runtime + JavaFX) for Windows and Linux
+# and uploads them as workflow artifacts. Triggered by a version tag or manually.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux application image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build the application image
+        run: packaging/package-linux.sh --skip-tests
+
+      - name: Verify the runtime image contains JavaFX
+        run: |
+          target/dist/runtime/bin/java --list-modules | grep -q '^javafx.controls'
+          target/dist/runtime/bin/java --list-modules | grep -q '^javafx.graphics'
+          echo "The runtime image contains the JavaFX modules."
+
+      - name: Verify the packaged launcher starts
+        run: target/dist/packages/StegSolver/bin/StegSolver --version
+
+      - name: Package the artifact
+        run: |
+          cd target/dist/packages
+          tar czf StegSolver-linux-x64.tar.gz StegSolver
+
+      - name: Upload the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StegSolver-linux-x64
+          path: target/dist/packages/StegSolver-linux-x64.tar.gz
+          retention-days: 30
+
+  windows:
+    name: Windows application image
+    runs-on: windows-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build the application image
+        run: powershell -ExecutionPolicy Bypass -File packaging/package-windows.ps1 -SkipTests
+
+      - name: Verify the runtime image contains JavaFX
+        shell: pwsh
+        run: |
+          $modules = & target\dist\runtime\bin\java.exe --list-modules
+          if (-not ($modules | Select-String '^javafx.controls')) { throw 'javafx.controls is missing' }
+          if (-not ($modules | Select-String '^javafx.graphics')) { throw 'javafx.graphics is missing' }
+          Write-Host 'The runtime image contains the JavaFX modules.'
+
+      - name: Verify the packaged launcher starts
+        shell: pwsh
+        run: |
+          & target\dist\packages\StegSolver\StegSolver.exe --version
+          if ($LASTEXITCODE -ne 0) { throw 'The packaged launcher failed' }
+
+      - name: Package the artifact
+        shell: pwsh
+        run: Compress-Archive -Path target\dist\packages\StegSolver -DestinationPath target\dist\packages\StegSolver-windows-x64.zip
+
+      - name: Upload the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StegSolver-windows-x64
+          path: target/dist/packages/StegSolver-windows-x64.zip
+          retention-days: 30

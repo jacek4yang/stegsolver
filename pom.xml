@@ -91,11 +91,6 @@
       <artifactId>core</artifactId>
       <version>${zxing.version}</version>
     </dependency>
-    <dependency>
-      <groupId>com.google.zxing</groupId>
-      <artifactId>javase</artifactId>
-      <version>${zxing.version}</version>
-    </dependency>
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -246,54 +241,20 @@
       </build>
     </profile>
 
-    <!-- ============ self contained distribution (jlink + jpackage) ============ -->
-    <!-- mvn -Pdist package -Ddist.type=app-image -->
-    <profile>
-      <id>dist</id>
-      <properties>
-        <dist.dir>${project.build.directory}/dist</dist.dir>
-        <dist.input>${project.build.directory}/dist/input</dist.input>
-        <dist.runtime>${project.build.directory}/dist/runtime</dist.runtime>
-        <dist.type>app-image</dist.type>
-      </properties>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-dependency-plugin</artifactId>
-            <version>${maven.dependency.plugin.version}</version>
-            <executions>
-              <execution>
-                <id>copy-runtime-deps</id>
-                <phase>prepare-package</phase>
-                <goals><goal>copy-dependencies</goal></goals>
-                <configuration>
-                  <includeScope>runtime</includeScope>
-                  <outputDirectory>${dist.input}</outputDirectory>
-                  <stripVersion>true</stripVersion>
-                </configuration>
-              </execution>
-              <execution>
-                <id>copy-javafx-modules</id>
-                <phase>prepare-package</phase>
-                <goals><goal>copy-dependencies</goal></goals>
-                <configuration>
-                  <includeScope>runtime</includeScope>
-                  <includeGroupIds>org.openjfx</includeGroupIds>
-                  <outputDirectory>${project.build.directory}/javafx-modules</outputDirectory>
-                  <stripVersion>true</stripVersion>
-                </configuration>
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-
     <!-- ============ JMH benchmarks ============ -->
-    <!-- mvn -Pbench test-compile exec:java -->
+    <!-- The benchmarks live in src/bench/java so that the normal build never compiles them. -->
+    <!-- mvn -Pbench test-compile exec:exec                                         -->
+    <!-- mvn -Pbench test-compile exec:exec -Dbench.include=TransformBenchmark      -->
     <profile>
       <id>bench</id>
+      <properties>
+        <bench.include>.*Benchmark.*</bench.include>
+        <bench.size/>
+        <bench.forks>1</bench.forks>
+        <bench.warmup>2</bench.warmup>
+        <bench.iterations>5</bench.iterations>
+        <bench.resultFile>${project.build.directory}/jmh-result.json</bench.resultFile>
+      </properties>
       <dependencies>
         <dependency>
           <groupId>org.openjdk.jmh</groupId>
@@ -311,6 +272,23 @@
       <build>
         <plugins>
           <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>3.6.1</version>
+            <executions>
+              <execution>
+                <id>add-benchmark-sources</id>
+                <phase>generate-test-sources</phase>
+                <goals><goal>add-test-source</goal></goals>
+                <configuration>
+                  <sources>
+                    <source>src/bench/java</source>
+                  </sources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-compiler-plugin</artifactId>
             <version>${maven.compiler.plugin.version}</version>
@@ -324,13 +302,26 @@
               </testAnnotationProcessorPaths>
             </configuration>
           </plugin>
+          <!-- A real forked JVM is required: JMH runs each benchmark in its own process. -->
           <plugin>
             <groupId>org.codehaus.mojo</groupId>
             <artifactId>exec-maven-plugin</artifactId>
             <version>${exec.plugin.version}</version>
             <configuration>
-              <mainClass>io.github.jacek4yang.stegsolver.bench.BenchmarkMain</mainClass>
+              <executable>${java.home}/bin/java</executable>
               <classpathScope>test</classpathScope>
+              <arguments>
+                <argument>-Xmx2g</argument>
+                <argument>-Dbench.include=${bench.include}</argument>
+                <argument>-Dbench.size=${bench.size}</argument>
+                <argument>-Dbench.forks=${bench.forks}</argument>
+                <argument>-Dbench.warmup=${bench.warmup}</argument>
+                <argument>-Dbench.iterations=${bench.iterations}</argument>
+                <argument>-Dbench.resultFile=${bench.resultFile}</argument>
+                <argument>-classpath</argument>
+                <classpath/>
+                <argument>io.github.jacek4yang.stegsolver.bench.BenchmarkMain</argument>
+              </arguments>
             </configuration>
           </plugin>
         </plugins>
