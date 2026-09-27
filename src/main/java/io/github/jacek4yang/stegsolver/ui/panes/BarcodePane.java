@@ -86,10 +86,10 @@ public final class BarcodePane implements ToolPane {
     private final CheckBox tryRotated = new CheckBox("Also scan quarter turns");
     private final CheckBox deepSearch = new CheckBox("Deep search (slow)");
     private final CheckBox alsoScreen = new CheckBox("Include screen region (X11)");
-    private final Button scanImageButton = new Button("Scan displayed image");
-    private final Button scanSelectionButton = new Button("Scan selection");
-    private final Button scanScreenButton = new Button("Scan screen region");
-    private final Button mergeButton = new Button("Merge structured append");
+    private final Button scanImageButton = new Button("Scan image");
+    private final Button scanSelectionButton = new Button("Scan region");
+    private final Button scanScreenButton = new Button("Scan screen");
+    private final Button mergeButton = new Button("Merge append");
     private final Button clearButton = new Button("Clear results");
 
     private ScanResult current;
@@ -272,8 +272,8 @@ public final class BarcodePane implements ToolPane {
         for (BarcodeHit hit : result.hits()) {
             HitMerge.add(hits, hit);
         }
-        summaryLabel.setText(result.summary()
-                + (result.notes().isEmpty() ? "" : "\n" + String.join(" \u00b7 ", result.notes())));
+        summaryLabel.setText(result.summary() + summariseNotes(result.notes()));
+        statusLabel.setText(result.notes().isEmpty() ? "" : String.join("\n", result.notes()));
         if (window.document().isOpen()) {
             window.document().setBackgroundScan(result);
         }
@@ -282,6 +282,22 @@ public final class BarcodePane implements ToolPane {
         }
         window.viewport().setBarcodeHits(List.copyOf(hits));
         updateButtons();
+    }
+
+    /** Keeps the summary readable by showing the first few notes and counting the rest. */
+    private static String summariseNotes(List<String> notes) {
+        if (notes.isEmpty()) {
+            return "";
+        }
+        int shown = Math.min(3, notes.size());
+        StringBuilder text = new StringBuilder();
+        for (int i = 0; i < shown; i++) {
+            text.append('\n').append(notes.get(i));
+        }
+        if (notes.size() > shown) {
+            text.append('\n').append(notes.size() - shown).append(" more note(s) below");
+        }
+        return text.toString();
     }
 
     /** Everything found since the last clear, as a result the host can report. */

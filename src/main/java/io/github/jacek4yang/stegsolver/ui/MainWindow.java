@@ -158,10 +158,17 @@ public final class MainWindow implements PreviewHost {
         onDocumentChanged();
     }
 
+    private Scene scene;
+
     public Scene createScene() {
-        Scene scene = new Scene(root, 1280, 820);
+        scene = new Scene(root, 1280, 820);
         themeManager = new ThemeManager(scene);
         themeManager.apply(ThemeManager.Theme.SYSTEM);
+        return scene;
+    }
+
+    /** The scene, for helpers such as the screenshot used in the documentation. */
+    public Scene scene() {
         return scene;
     }
 
@@ -278,6 +285,7 @@ public final class MainWindow implements PreviewHost {
 
         Menu help = new Menu("Help");
         help.getItems().addAll(
+                item("Run self test on this image", null, this::runSelfTest),
                 item("Keyboard shortcuts", null, this::showShortcuts),
                 item("About StegSolver", null, this::showAbout));
 
@@ -688,6 +696,42 @@ public final class MainWindow implements PreviewHost {
                 """);
     }
 
+    /**
+     * Runs every engine layer once on the current image and shows the result. Useful to confirm that a
+     * downloaded build really works, and to report a problem with useful detail.
+     */
+    private void runSelfTest() {
+        ImageData image = documentImage();
+        if (image == null) {
+            status("Open an image first");
+            return;
+        }
+        Path file = document.path();
+        status("Running the self test...");
+        workRunner.submit("self test", () -> io.github.jacek4yang.stegsolver.selfcheck.SelfTest
+                .run(image, file), report -> {
+                    status("Self test: " + (report.ok() ? "all steps succeeded" : "some steps failed"));
+                    javafx.scene.control.TextArea area = new javafx.scene.control.TextArea(report.toText());
+                    area.setEditable(false);
+                    area.setWrapText(false);
+                    area.getStyleClass().add("mono");
+                    area.setPrefColumnCount(90);
+                    area.setPrefRowCount(16);
+                    javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                            report.ok() ? javafx.scene.control.Alert.AlertType.INFORMATION
+                                    : javafx.scene.control.Alert.AlertType.WARNING);
+                    alert.initOwner(stage);
+                    alert.setTitle("StegSolver self test");
+                    alert.setHeaderText(report.ok()
+                            ? "Every engine layer worked on this image"
+                            : "Some engine layers failed on this image");
+                    alert.getDialogPane().setContent(area);
+                    alert.setResizable(true);
+                    alert.showAndWait();
+                },
+                error -> FxUtils.error(window(), "Self test failed", String.valueOf(error), error));
+    }
+
     private void showAbout() {
         FxUtils.info(stage, "About StegSolver", """
                 StegSolver %s
@@ -827,6 +871,10 @@ public final class MainWindow implements PreviewHost {
         if (Math.abs(sliderValue - zoomSlider.getValue()) > 0.05) {
             zoomSlider.setValue(sliderValue);
         }
+        stage.setTitle(document.isOpen()
+                ? "StegSolver — " + document.fileName() + " — " + document.transform().label()
+                        + (isShowingPreview() ? " (viewing " + previewLabel + ")" : "")
+                : "StegSolver");
         boolean preview = isShowingPreview();
         viewBadge.setVisible(preview);
         viewBadge.setManaged(preview);
@@ -837,6 +885,26 @@ public final class MainWindow implements PreviewHost {
         }
         infoPane.refresh();
         extractPane.onSelectionChanged(viewport.selection());
+    }
+
+    /** Selects a tool dock tab by index; used by the smoke test to document a particular panel. */
+    public void selectToolTab(int index) {
+        if (index >= 0 && index < panes.size()) {
+            if (!toolDock.isVisible()) {
+                toggleDock();
+            }
+            toolDock.getSelectionModel().select(index);
+        }
+    }
+
+    /** The viewport image node, for rendering diagnostics. */
+    public javafx.scene.Node imageViewNode() {
+        return viewport.imageViewNode();
+    }
+
+    /** Layout diagnostics for the smoke test. */
+    public String layoutDiagnostics() {
+        return viewport.diagnostics();
     }
 
     /** The text currently shown in the status bar; used by diagnostics and the smoke test. */
