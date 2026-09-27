@@ -12,7 +12,7 @@ import java.util.Set;
  * Options of a barcode scan.
  *
  * @param tryHarder        enables ZXing's {@code TRY_HARDER} hint (slower, much better on noisy images)
- * @param tryInverted      also tries the inverted image, for light symbols on a dark background
+ * @param tryInverted      also scans an inverted copy, for light symbols on a dark background
  * @param tryRotated       also tries quarter turns of the image (90/180/270 degrees)
  * @param multipleSymbols  looks for several symbols in one image instead of stopping at the first
  * @param deepSearch       adds the expensive fallbacks (rescaled copies, alternate binarizer, pure
@@ -109,9 +109,9 @@ public record ScanOptions(boolean tryHarder, boolean tryInverted, boolean tryRot
         if (!formats.isEmpty()) {
             hints.put(DecodeHintType.POSSIBLE_FORMATS, EnumSet.copyOf(formats));
         }
-        if (tryInverted) {
-            hints.put(DecodeHintType.ALSO_INVERTED, Boolean.TRUE);
-        }
+        // DecodeHintType.ALSO_INVERTED is deliberately not used: ZXing would silently try the inverted
+        // image inside the reader, and StegSolver would no longer know whether the symbol it found was
+        // light on dark. The inverted copy is scanned explicitly instead, which keeps the report exact.
         if (pureBarcode) {
             hints.put(DecodeHintType.PURE_BARCODE, Boolean.TRUE);
         }

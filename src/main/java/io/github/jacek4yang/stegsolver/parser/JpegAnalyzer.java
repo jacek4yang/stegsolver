@@ -42,7 +42,7 @@ final class JpegAnalyzer {
                 continue;
             }
             if (marker == 0xd9) {
-                report.openSection("End of image");
+                report.openSection("End of image (EOI)");
                 report.field("Offset", "0x" + Integer.toHexString(markerStart) + " (" + markerStart + ")");
                 sawEoi = true;
                 pos = markerStart + 1;
@@ -64,19 +64,21 @@ final class JpegAnalyzer {
                     segmentCount, marker, markerStart));
             String name = markerName(marker);
             report.add("Marker: " + name);
-            if (!reader.has(markerStart + 2, 2)) {
+            // The marker itself is two bytes: the 0xFF that was skipped above and the code byte at
+            // markerStart. The length field therefore starts right after the code byte.
+            if (!reader.has(markerStart + 1, 2)) {
                 report.warn("Segment FF" + String.format(Locale.ROOT, "%02X", marker)
                         + " at offset " + markerStart + " is truncated (no length field)");
                 break;
             }
-            int length = reader.be16(markerStart + 2);
+            int length = reader.be16(markerStart + 1);
             report.field("Declared length", length + " bytes (including these two)");
             if (length < 2) {
                 report.warn("Segment FF" + String.format(Locale.ROOT, "%02X", marker)
                         + " declares an impossible length of " + length);
                 break;
             }
-            int dataStart = markerStart + 4;
+            int dataStart = markerStart + 3;
             int dataLength = length - 2;
             if (!reader.has(dataStart, dataLength)) {
                 report.warn("Segment FF" + String.format(Locale.ROOT, "%02X", marker)
@@ -105,7 +107,9 @@ final class JpegAnalyzer {
                 case 0xdf -> report.add("Expand reference components");
                 case 0xda -> {
                     report.add("Start of scan");
-                    report.field("Samples per line", reader.be16(markerStart + 2));
+                    if (dataLength >= 1) {
+                        report.field("Components in scan", reader.u8(dataStart));
+                    }
                     int scanStart = dataStart + dataLength;
                     int scanEnd = findScanEnd(reader, scanStart);
                     int scanBytes = scanEnd - scanStart;
@@ -137,7 +141,7 @@ final class JpegAnalyzer {
 
         report.openSection("JPEG summary");
         report.field("Segments visited", segmentCount);
-        report.field("End of image marker", sawEoi ? "present" : "MISSING");
+        report.field("EOI (end of image) marker", sawEoi ? "present" : "MISSING");
         report.field("Bytes consumed", Math.min(pos, reader.size()));
         if (!sawEoi) {
             report.warn("No EOI marker found: the file is truncated or padded with foreign data");

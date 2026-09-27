@@ -1,5 +1,6 @@
 package io.github.jacek4yang.stegsolver.barcode;
 
+import com.google.zxing.BarcodeFormat;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.DecodeHintType;
 import com.google.zxing.LuminanceSource;
@@ -217,7 +218,11 @@ public final class BarcodeScanner {
         private void runOn(BinaryBitmap bitmap, BitmapAttempt attempt, String description, boolean inverted) {
             Map<DecodeHintType, Object> hints = options.toHints(attempt.pureBarcode);
             if (options.multipleSymbols()) {
-                decodeMultiple(new QRCodeMultiReader(), bitmap, hints, attempt, description, inverted);
+                // The QR multiple reader ignores POSSIBLE_FORMATS, so it must be skipped when the user
+                // restricted the scan to other symbologies.
+                if (options.allFormats() || options.formats().contains(BarcodeFormat.QR_CODE)) {
+                    decodeMultiple(new QRCodeMultiReader(), bitmap, hints, attempt, description, inverted);
+                }
                 if (!hitAlmostFull()) {
                     decodeMultiple(new GenericMultipleBarcodeReader(new MultiFormatReader()), bitmap, hints,
                             attempt, description, inverted);
@@ -273,19 +278,28 @@ public final class BarcodeScanner {
         private void add(Result result, BitmapAttempt attempt, String description, boolean inverted) {
             BarcodeHit hit = toHit(result, attempt, description, inverted);
             for (int i = 0; i < hits.size(); i++) {
-                if (isSameSymbol(hits.get(i), hit)) {
-                    // Keep the richer of the two: a merged Structured Append symbol carries more bytes
-                    // than the single part the other pass found.
-                    if (hit.payloadSize() > hits.get(i).payloadSize()) {
-                        hits.set(i, hit);
-                    }
-                    return;
+                BarcodeHit existing = hits.get(i);
+                if (!describesSameSymbol(existing, hit)) {
+                    continue;
                 }
+                boolean existingLocated = !existing.points().isEmpty();
+                boolean candidateLocated = !hit.points().isEmpty();
+                if (candidateLocated && !existingLocated) {
+                    // A located hit is strictly more useful than one that decoded without positions.
+                    hits.set(i, hit);
+                } else if (!candidateLocated && existingLocated) {
+                    // Keep the located one.
+                } else if (hit.payloadSize() > existing.payloadSize()) {
+                    // A merged Structured Append symbol carries more bytes than a single part.
+                    hits.set(i, hit);
+                }
+                return;
             }
             hits.add(hit);
         }
 
-        private boolean isSameSymbol(BarcodeHit existing, BarcodeHit candidate) {
+        /** True when two hits describe the same symbol: same content and the same place. */
+        private boolean describesSameSymbol(BarcodeHit existing, BarcodeHit candidate) {
             if (existing.format() != candidate.format()) {
                 return false;
             }
@@ -293,6 +307,12 @@ public final class BarcodeScanner {
             String candidateContent = contentKey(candidate);
             if (existingContent.isEmpty() || !existingContent.equals(candidateContent)) {
                 return false;
+            }
+            // A decode without any result points (pure barcode mode, and some readers) covers the whole
+            // scanned area, so it cannot be located and has to be treated as overlapping everything with
+            // the same content.
+            if (existing.points().isEmpty() || candidate.points().isEmpty()) {
+                return true;
             }
             double dx = existing.bounds().x() - candidate.bounds().x();
             double dy = existing.bounds().y() - candidate.bounds().y();

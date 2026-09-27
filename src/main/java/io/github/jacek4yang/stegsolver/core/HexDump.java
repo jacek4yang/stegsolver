@@ -25,7 +25,13 @@ public final class HexDump {
         }
         int from = Math.max(0, Math.min(offset, data.length));
         int available = Math.min(length, data.length - from);
+        if (available <= 0) {
+            return "(empty)";
+        }
         int shown = Math.min(available, Math.max(0, maxBytes));
+        if (shown <= 0) {
+            return "… " + available + " more bytes not shown (offset " + from + ")";
+        }
         StringBuilder out = new StringBuilder(shown * 5 + 128);
         for (int i = 0; i < shown; i += BYTES_PER_LINE) {
             if (i > 0) {

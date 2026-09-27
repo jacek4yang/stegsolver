@@ -34,6 +34,7 @@ public final class PayloadDetector {
         byte[] data = payload == null ? new byte[0] : payload;
         List<String> notes = new ArrayList<>();
         double entropy = entropy(data);
+        int distinct = distinctByteValues(data);
         String sha256 = sha256(data);
 
         if (data.length == 0) {
@@ -45,10 +46,10 @@ public final class PayloadDetector {
                         + "no payload bytes to save");
                 boolean ascii = decodedText.chars().allMatch(c -> c >= 32 && c < 127);
                 return new PayloadInfo(ascii ? PayloadType.TEXT_ASCII : PayloadType.TEXT_UTF8, 0, sha256,
-                        0, decodedText, notes);
+                        0, 0, decodedText, notes);
             }
             notes.add("The symbol decoded to nothing at all");
-            return new PayloadInfo(PayloadType.EMPTY, 0, sha256, 0, null, notes);
+            return new PayloadInfo(PayloadType.EMPTY, 0, sha256, 0, 0, null, notes);
         }
 
         PayloadType type = detectType(data);
@@ -130,14 +131,19 @@ public final class PayloadDetector {
             }
         }
 
-        if (entropy >= 7.5 && !type.isText()) {
+        if (entropy > 0 && !type.isText()) {
             notes.add(String.format(Locale.ROOT,
-                    "Entropy %.2f bits per byte: the data is compressed or encrypted", entropy));
-        } else if (entropy > 0 && !type.isText()) {
-            notes.add(String.format(Locale.ROOT, "Entropy %.2f bits per byte", entropy));
+                    "Entropy %.2f bits per byte over %d distinct byte values (%d bytes)",
+                    entropy, distinct, data.length));
         }
 
-        return new PayloadInfo(type, data.length, sha256, entropy, text == null ? textPreview : text, notes);
+        PayloadInfo info = new PayloadInfo(type, data.length, sha256, entropy, distinct,
+                text == null ? textPreview : text, notes);
+        if (info.looksCompressedOrEncrypted()) {
+            notes.add(String.format(Locale.ROOT,
+                    "Normalised entropy %.2f: the data is compressed or encrypted", info.normalisedEntropy()));
+        }
+        return info;
     }
 
     /** Signature only; no notes. Returns {@link PayloadType#BINARY} when nothing matches. */
@@ -195,10 +201,26 @@ public final class PayloadDetector {
         if (startsWith(data, 0xca, 0xfe, 0xba, 0xbe)) {
             return PayloadType.JAVA_CLASS;
         }
-        if (isAsciiText(data) || isUtf8Text(data)) {
+        if (isAsciiText(data)) {
             return looksLikeBase64(data) ? PayloadType.BASE64_TEXT : PayloadType.TEXT_ASCII;
         }
+        if (isUtf8Text(data)) {
+            return PayloadType.TEXT_UTF8;
+        }
         return PayloadType.BINARY;
+    }
+
+    /** Number of distinct byte values present in the payload. */
+    public static int distinctByteValues(byte[] data) {
+        boolean[] seen = new boolean[256];
+        int distinct = 0;
+        for (byte value : data) {
+            if (!seen[value & 0xff]) {
+                seen[value & 0xff] = true;
+                distinct++;
+            }
+        }
+        return distinct;
     }
 
     /** Shannon entropy of the payload in bits per byte. */

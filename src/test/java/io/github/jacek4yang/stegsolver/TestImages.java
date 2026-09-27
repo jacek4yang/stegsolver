@@ -123,6 +123,22 @@ public final class TestImages {
         return qrCode(new String(payload, StandardCharsets.ISO_8859_1), moduleSize, "ISO-8859-1");
     }
 
+    /** Renders a Code 128 barcode, used to exercise the barcodes that need a horizontal orientation. */
+    public static ImageData code128(String content, int width, int height) {
+        BitMatrix matrix = new com.google.zxing.oned.Code128Writer()
+                .encode(content, BarcodeFormat.CODE_128, width, height, java.util.Map.of());
+        int[] pixels = new int[matrix.getWidth() * matrix.getHeight()];
+        java.util.Arrays.fill(pixels, 0xffffffff);
+        for (int y = 0; y < matrix.getHeight(); y++) {
+            for (int x = 0; x < matrix.getWidth(); x++) {
+                if (matrix.get(x, y)) {
+                    pixels[y * matrix.getWidth() + x] = 0xff000000;
+                }
+            }
+        }
+        return ImageData.opaque(matrix.getWidth(), matrix.getHeight(), pixels);
+    }
+
     /** Renders a BitMatrix with a quiet zone; scale 0 means "use the module size as is". */
     public static ImageData renderMatrix(BitMatrix matrix, int moduleSize, int quietZoneModules) {
         int scale = Math.max(1, moduleSize);
@@ -176,6 +192,30 @@ public final class TestImages {
             pixels[i] = image.pixels()[i] ^ 0xffffff;
         }
         return ImageData.of(image.width(), image.height(), pixels, image.hasAlpha());
+    }
+
+    /** Draws an image onto an existing image in place, returning a new image. */
+    public static ImageData overlay(ImageData canvas, ImageData image, int offsetX, int offsetY) {
+        int[] pixels = canvas.pixels().clone();
+        for (int y = 0; y < image.height(); y++) {
+            int targetY = y + offsetY;
+            if (targetY < 0 || targetY >= canvas.height()) {
+                continue;
+            }
+            for (int x = 0; x < image.width(); x++) {
+                int targetX = x + offsetX;
+                if (targetX < 0 || targetX >= canvas.width()) {
+                    continue;
+                }
+                pixels[targetY * canvas.width() + targetX] = image.pixels()[y * image.width() + x];
+            }
+        }
+        return ImageData.of(canvas.width(), canvas.height(), pixels, canvas.hasAlpha());
+    }
+
+    /** A white canvas of the given size. */
+    public static ImageData whiteCanvas(int width, int height) {
+        return solid(width, height, 0xffffffff);
     }
 
     /** Copies an image into a larger white canvas at the given offset. */

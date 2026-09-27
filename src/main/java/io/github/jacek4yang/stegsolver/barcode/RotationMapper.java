@@ -60,35 +60,35 @@ public final class RotationMapper {
 
     /**
      * Maps a rectangle from a rotated bitmap back into the original image, returning the bounding box
-     * of the four mapped corners clamped to the image.
+     * of the mapped corner pixels clamped to the image.
      */
     public static Roi toOriginalRect(Roi rotatedRect, int quarterTurns, int originalWidth,
             int originalHeight) {
         if (rotatedRect == null || rotatedRect.isEmpty()) {
             return Roi.EMPTY;
         }
+        // The corners of a rectangle are its outermost *pixels*, so the last addressable coordinate is
+        // maxX-1 / maxY-1; using the exclusive bounds would inflate the result by one pixel.
+        double[] xs = {rotatedRect.x(), rotatedRect.maxX() - 1.0};
+        double[] ys = {rotatedRect.y(), rotatedRect.maxY() - 1.0};
         double minX = Double.MAX_VALUE;
         double minY = Double.MAX_VALUE;
         double maxX = -Double.MAX_VALUE;
         double maxY = -Double.MAX_VALUE;
-        double[][] corners = {
-                {rotatedRect.x(), rotatedRect.y()},
-                {rotatedRect.maxX(), rotatedRect.y()},
-                {rotatedRect.maxX(), rotatedRect.maxY()},
-                {rotatedRect.x(), rotatedRect.maxY()},
-        };
-        for (double[] corner : corners) {
-            Point mapped = toOriginal(corner[0], corner[1], quarterTurns, originalWidth, originalHeight);
-            minX = Math.min(minX, mapped.x());
-            minY = Math.min(minY, mapped.y());
-            maxX = Math.max(maxX, mapped.x());
-            maxY = Math.max(maxY, mapped.y());
+        for (double cornerX : xs) {
+            for (double cornerY : ys) {
+                Point mapped = toOriginal(cornerX, cornerY, quarterTurns, originalWidth, originalHeight);
+                minX = Math.min(minX, mapped.x());
+                minY = Math.min(minY, mapped.y());
+                maxX = Math.max(maxX, mapped.x());
+                maxY = Math.max(maxY, mapped.y());
+            }
         }
         int x0 = (int) Math.floor(minX);
         int y0 = (int) Math.floor(minY);
         int x1 = (int) Math.ceil(maxX);
         int y1 = (int) Math.ceil(maxY);
-        return Roi.clamp(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0), originalWidth, originalHeight);
+        return Roi.clamp(x0, y0, x1 - x0 + 1, y1 - y0 + 1, originalWidth, originalHeight);
     }
 
     /** Undoes a uniform scaling applied to a scan bitmap. */

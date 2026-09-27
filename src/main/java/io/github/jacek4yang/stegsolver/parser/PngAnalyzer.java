@@ -75,6 +75,10 @@ final class PngAnalyzer {
         String lastType = "";
 
         while (pos < reader.size()) {
+            if (sawIend) {
+                // Everything after IEND is appended data, not part of the PNG stream.
+                break;
+            }
             if (!reader.has(pos, 12)) {
                 report.warn("Truncated chunk header at offset " + pos + " (" + (reader.size() - pos)
                         + " bytes left, 8 needed)");
@@ -104,7 +108,8 @@ final class PngAnalyzer {
             describeChunkFlags(type, report);
 
             long storedCrc = reader.be32u(pos + 8 + length);
-            long computedCrc = computeCrc(reader.array(), dataStart, 4 + length);
+            // The CRC covers the chunk type and the chunk data, i.e. from pos+4 up to pos+8+length.
+            long computedCrc = computeCrc(reader.array(), pos + 4, 4 + length);
             if (storedCrc != computedCrc) {
                 report.warn("CRC mismatch in chunk '" + type + "' at offset " + pos
                         + " (stored 0x" + Long.toHexString(storedCrc) + ", computed 0x"
