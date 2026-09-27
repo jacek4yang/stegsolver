@@ -59,15 +59,18 @@ public final class FxUtils {
     }
 
     /** Copies a hex rendering of bytes to the system clipboard. */
-    public static void copyHex(byte[] data, int maxBytes) {
+    public static int copyHex(byte[] data, int maxBytes) {
+        if (maxBytes <= 0) throw new IllegalArgumentException("Bytes per line must be positive");
+        int copied = Math.min(data.length, 65_536);
         StringBuilder text = new StringBuilder();
-        for (int i = 0; i < data.length; i += maxBytes) {
+        for (int i = 0; i < copied; i += maxBytes) {
             if (i > 0) {
                 text.append('\n');
             }
-            text.append(HexDump.hex(data, i, Math.min(maxBytes, data.length - i), maxBytes));
+            text.append(HexDump.hex(data, i, Math.min(maxBytes, copied - i), maxBytes));
         }
         copyText(text.toString());
+        return copied;
     }
 
     /** Copies an image to the system clipboard. */

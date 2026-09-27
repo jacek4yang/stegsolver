@@ -16,12 +16,18 @@ concurrency:
 
 jobs:
   build:
-    name: Build and test (${{ matrix.os }})
+    name: Build and test (${{ matrix.check }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Keep the existing protected-branch check names while pinning the Linux runner.
+        include:
+          - os: ubuntu-22.04
+            check: ubuntu-latest
+          - os: windows-latest
+            check: windows-latest
 
     steps:
       - name: Check out the repository
@@ -60,6 +66,23 @@ jobs:
       - name: Run the engine self test (no display needed)
         run: mvn -B -ntp --no-transfer-progress -Pself-test exec:exec
 
+      - name: Prepare display integration tests
+        run: mvn -B -ntp test-compile dependency:build-classpath '-Dmdep.outputFile=target/test-cp.txt' '-Dmdep.includeScope=test'
+
+      - name: Test UI and screen capture on X11
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb libgtk-3-0
+          xvfb-run -a --server-args="-screen 0 1600x1000x24" java -Dprism.order=sw -cp "target/classes:target/test-classes:$(cat target/test-cp.txt)" io.github.jacek4yang.stegsolver.ui.FxIntegrationCheck
+
+      - name: Test UI and screen capture on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $testCp = 'target/classes;target/test-classes;' + (Get-Content target/test-cp.txt -Raw).Trim()
+          java '-Dprism.order=sw' -cp $testCp io.github.jacek4yang.stegsolver.ui.FxIntegrationCheck
+          if ($LASTEXITCODE -ne 0) { throw 'UI integration check failed' }
+
       - name: Upload the test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -71,7 +94,7 @@ jobs:
 
   smoke-test:
     name: Smoke test the application (Linux, X11 via Xvfb)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: build
     steps:
       - name: Check out the repository

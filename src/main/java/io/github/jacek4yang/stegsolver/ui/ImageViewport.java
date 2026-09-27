@@ -5,17 +5,29 @@ import io.github.jacek4yang.stegsolver.core.Roi;
 import io.github.jacek4yang.stegsolver.core.ViewportGeometry;
 import java.util.List;
 import java.util.function.Consumer;
+import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 
 /**
  * The central image viewport: zoom, pan, region selection, the barcode overlay and the pixel inspector.
@@ -63,18 +75,79 @@ public final class ImageViewport extends Pane {
     private Consumer<Roi> onSelectionChanged = roi -> {
     };
 
+    private final VBox emptyStateNode = buildEmptyState();
+
+    private Runnable onActionCopyImage;
+    private Runnable onActionSaveImage;
+    private Runnable onActionScanImage;
+    private Runnable onActionScanSelection;
+    private Runnable onActionNextTransform;
+    private Runnable onActionPrevTransform;
+
     public ImageViewport() {
         getStyleClass().add("steg-viewport");
         imageView.setPreserveRatio(false);
         imageView.setSmooth(false);
         imageView.setManaged(false);
         overlay.setManaged(false);
-        getChildren().addAll(imageView, overlay);
+        emptyStateNode.setManaged(false);
+        getChildren().addAll(imageView, overlay, emptyStateNode);
         setClip(clip);
         setMinSize(0, 0);
         setFocusTraversable(true);
         geometry = new ViewportGeometry(1, 1);
         installHandlers();
+    }
+
+    private VBox buildEmptyState() {
+        Label icon = new Label("\u25A3");
+        icon.getStyleClass().add("steg-empty-icon");
+
+        Label title = new Label("No Image Loaded");
+        title.getStyleClass().add("steg-empty-title");
+
+        Label subtitle = new Label("Drop an image here or press Ctrl+O to open");
+        subtitle.getStyleClass().add("steg-empty-hint");
+
+        HBox hintsRow1 = new HBox(8,
+                hintPill("Ctrl+O", "Open"),
+                hintPill("\u25C0 / \u25B6", "Transforms"),
+                hintPill("Ctrl+B", "Scan Barcodes")
+        );
+        hintsRow1.setAlignment(Pos.CENTER);
+
+        HBox hintsRow2 = new HBox(8,
+                hintPill("Scroll", "Zoom"),
+                hintPill("Drag", "Pan"),
+                hintPill("Double-click", "Fit / 1:1")
+        );
+        hintsRow2.setAlignment(Pos.CENTER);
+
+        VBox box = new VBox(10, icon, title, subtitle, hintsRow1, hintsRow2);
+        box.setAlignment(Pos.CENTER);
+        box.getStyleClass().add("steg-empty-state");
+        return box;
+    }
+
+    private static HBox hintPill(String key, String desc) {
+        Label keyLabel = new Label(key);
+        keyLabel.getStyleClass().add("steg-key-badge");
+        Label descLabel = new Label(desc);
+        descLabel.getStyleClass().add("steg-key-desc");
+        HBox pill = new HBox(5, keyLabel, descLabel);
+        pill.setAlignment(Pos.CENTER);
+        pill.getStyleClass().add("steg-hint-pill");
+        return pill;
+    }
+
+    public void setContextActions(Runnable copy, Runnable save, Runnable scanImage, Runnable scanSelection,
+            Runnable nextTransform, Runnable prevTransform) {
+        this.onActionCopyImage = copy;
+        this.onActionSaveImage = save;
+        this.onActionScanImage = scanImage;
+        this.onActionScanSelection = scanSelection;
+        this.onActionNextTransform = nextTransform;
+        this.onActionPrevTransform = prevTransform;
     }
 
     // ------------------------------------------------------------------ content
@@ -92,6 +165,7 @@ public final class ImageViewport extends Pane {
         this.hasAlpha = alpha;
         this.contentLabel = label;
         imageView.setImage(rendered);
+        emptyStateNode.setVisible(false);
         if (!sameSize) {
             geometry.setImage(width, height);
             geometry.setViewportSize(getWidth(), getHeight());
@@ -110,6 +184,7 @@ public final class ImageViewport extends Pane {
         selection = Roi.EMPTY;
         contentLabel = "No image";
         overlay.getGraphicsContext2D().clearRect(0, 0, overlay.getWidth(), overlay.getHeight());
+        emptyStateNode.setVisible(true);
         layoutImage();
     }
 
@@ -257,6 +332,11 @@ public final class ImageViewport extends Pane {
         overlay.setWidth(Math.max(0, width));
         overlay.setHeight(Math.max(0, height));
         geometry.setViewportSize(width, height);
+        if (emptyStateNode.isVisible()) {
+            double ew = Math.min(width - 40, 520);
+            double eh = emptyStateNode.prefHeight(ew);
+            emptyStateNode.resizeRelocate((width - ew) / 2, (height - eh) / 2, ew, eh);
+        }
         layoutImage();
     }
 
@@ -280,20 +360,95 @@ public final class ImageViewport extends Pane {
         double height = overlay.getHeight();
         graphics.clearRect(0, 0, width, height);
 
+        if (!hasContent()) {
+            return;
+        }
+
+        double zoom = geometry.zoom();
+        double imgX = geometry.panX();
+        double imgY = geometry.panY();
+        double imgW = imageWidth * zoom;
+        double imgH = imageHeight * zoom;
+
+        // Subtle outer border defining exact image canvas boundary
+        graphics.setLineWidth(1.0);
+        graphics.setStroke(Color.color(0.5, 0.5, 0.5, 0.35));
+        graphics.strokeRect(imgX - 0.5, imgY - 0.5, imgW + 1.0, imgH + 1.0);
+
+        // Pixel grid when zoomed in (zoom >= 4.0)
+        if (zoom >= 4.0) {
+            int startX = Math.max(0, (int) Math.floor(geometry.toImageX(0)));
+            int endX = Math.min(imageWidth, (int) Math.ceil(geometry.toImageX(width)));
+            int startY = Math.max(0, (int) Math.floor(geometry.toImageY(0)));
+            int endY = Math.min(imageHeight, (int) Math.ceil(geometry.toImageY(height)));
+
+            double opacity = Math.min(0.28, (zoom - 3.5) * 0.07);
+            graphics.setStroke(Color.color(0.5, 0.5, 0.5, opacity));
+            graphics.setLineWidth(0.65);
+
+            for (int x = startX; x <= endX; x++) {
+                double vx = Math.floor(geometry.toViewX(x)) + 0.5;
+                graphics.strokeLine(vx, Math.max(imgY, 0), vx, Math.min(imgY + imgH, height));
+            }
+            for (int y = startY; y <= endY; y++) {
+                double vy = Math.floor(geometry.toViewY(y)) + 0.5;
+                graphics.strokeLine(Math.max(imgX, 0), vy, Math.min(imgX + imgW, width), vy);
+            }
+        }
+
+        // Selection overlay with dual-tone contrast and precision badge
         if (selection.isNotEmpty()) {
             double x = geometry.toViewX(selection.x());
             double y = geometry.toViewY(selection.y());
-            double w = selection.width() * geometry.zoom();
-            double h = selection.height() * geometry.zoom();
-            graphics.setFill(Color.color(0.2, 0.6, 1.0, 0.18));
+            double w = selection.width() * zoom;
+            double h = selection.height() * zoom;
+
+            // Semi-transparent selection fill
+            graphics.setFill(Color.color(0.18, 0.55, 0.95, 0.22));
             graphics.fillRect(x, y, w, h);
-            graphics.setStroke(Color.web("#2f6fb5"));
+
+            // Outer dark boundary for high contrast on bright pixels
+            graphics.setLineWidth(1.0);
+            graphics.setStroke(Color.rgb(15, 23, 42, 0.7));
+            graphics.strokeRect(x - 0.5, y - 0.5, w + 1.0, h + 1.0);
+
+            // Inner bright accent border
             graphics.setLineWidth(1.5);
-            graphics.strokeRect(x + 0.5, y + 0.5, w, h);
+            graphics.setStroke(Color.web("#38bdf8"));
+            graphics.strokeRect(x + 0.5, y + 0.5, w - 1.0, h - 1.0);
+
+            // Corner handles
+            double hs = 3.5;
+            drawCornerHandle(graphics, x, y, hs);
+            drawCornerHandle(graphics, x + w, y, hs);
+            drawCornerHandle(graphics, x, y + h, hs);
+            drawCornerHandle(graphics, x + w, y + h, hs);
+
+            // Precision dimension & coordinate badge
+            String badgeText = selection.width() + " \u00d7 " + selection.height() + "  (" + selection.x() + ", " + selection.y() + ")";
+            graphics.setFont(Font.font("Consolas", FontWeight.BOLD, 10.5));
+            double badgeW = badgeText.length() * 6.5 + 12;
+            double badgeH = 18;
+            double badgeX = x + w - badgeW;
+            double badgeY = y + h + 4;
+            if (badgeY + badgeH > height) {
+                badgeY = y - badgeH - 4;
+            }
+            if (badgeX < 4) {
+                badgeX = 4;
+            }
+            graphics.setFill(Color.rgb(15, 23, 42, 0.88));
+            graphics.fillRoundRect(badgeX, badgeY, badgeW, badgeH, 4, 4);
+            graphics.setStroke(Color.rgb(56, 189, 248, 0.7));
+            graphics.setLineWidth(1.0);
+            graphics.strokeRoundRect(badgeX, badgeY, badgeW, badgeH, 4, 4);
+            graphics.setFill(Color.WHITE);
+            graphics.fillText(badgeText, badgeX + 6, badgeY + 13);
         }
 
+        // Barcode overlay
         if (showBarcodeOverlay && !hits.isEmpty()) {
-            graphics.setLineWidth(2);
+            graphics.setLineWidth(2.0);
             for (int i = 0; i < hits.size(); i++) {
                 BarcodeHit hit = hits.get(i);
                 Roi bounds = hit.bounds();
@@ -302,17 +457,38 @@ public final class ImageViewport extends Pane {
                 }
                 double x = geometry.toViewX(bounds.x());
                 double y = geometry.toViewY(bounds.y());
-                double w = Math.max(2, bounds.width() * geometry.zoom());
-                double h = Math.max(2, bounds.height() * geometry.zoom());
-                graphics.setStroke(Color.web("#e8112d"));
+                double w = Math.max(4, bounds.width() * zoom);
+                double h = Math.max(4, bounds.height() * zoom);
+
+                // Subtle transparent red fill
+                graphics.setFill(Color.rgb(239, 68, 68, 0.15));
+                graphics.fillRect(x, y, w, h);
+
+                // Outer crisp border
+                graphics.setStroke(Color.web("#ef4444"));
                 graphics.strokeRect(x, y, w, h);
-                String label = String.valueOf(i + 1);
-                graphics.setFill(Color.web("#e8112d"));
-                graphics.fillRect(x, Math.max(0, y - 16), 16, 16);
+
+                // Hit badge with number and symbology
+                String label = (i + 1) + "  " + hit.format().name();
+                graphics.setFont(Font.font("Segoe UI", FontWeight.BOLD, 10.5));
+                double tagW = label.length() * 6.2 + 10;
+                double tagH = 17;
+                double tagY = Math.max(0, y - tagH - 2);
+
+                graphics.setFill(Color.web("#dc2626"));
+                graphics.fillRoundRect(x, tagY, tagW, tagH, 3, 3);
                 graphics.setFill(Color.WHITE);
-                graphics.fillText(label, x + 5, Math.max(12, y - 4));
+                graphics.fillText(label, x + 5, tagY + 12);
             }
         }
+    }
+
+    private static void drawCornerHandle(GraphicsContext graphics, double x, double y, double radius) {
+        graphics.setFill(Color.WHITE);
+        graphics.setStroke(Color.web("#0284c7"));
+        graphics.setLineWidth(1.0);
+        graphics.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+        graphics.strokeRect(x - radius, y - radius, radius * 2, radius * 2);
     }
 
     // ------------------------------------------------------------------ input
@@ -322,7 +498,7 @@ public final class ImageViewport extends Pane {
             if (!hasContent()) {
                 return;
             }
-            double factor = event.getDeltaY() > 0 ? 1.12 : 1 / 1.12;
+            double factor = event.getDeltaY() > 0 ? 1.15 : 1 / 1.15;
             geometry.zoomAt(event.getX(), event.getY(), factor);
             layoutImage();
             event.consume();
@@ -347,7 +523,16 @@ public final class ImageViewport extends Pane {
 
         addEventHandler(MouseEvent.MOUSE_DRAGGED, event -> {
             if (selecting) {
-                setSelection(geometry.viewRectToImageRoi(dragStartX, dragStartY, event.getX(), event.getY()));
+                double endX = event.getX();
+                double endY = event.getY();
+                if (event.isShiftDown()) {
+                    double deltaX = endX - dragStartX;
+                    double deltaY = endY - dragStartY;
+                    double side = Math.max(Math.abs(deltaX), Math.abs(deltaY));
+                    endX = dragStartX + Math.copySign(side, deltaX);
+                    endY = dragStartY + Math.copySign(side, deltaY);
+                }
+                setSelection(geometry.viewRectToImageRoi(dragStartX, dragStartY, endX, endY));
                 reportPixel(event);
             } else if (panning) {
                 geometry.setPan(panAnchorX + (event.getX() - panStartX), panAnchorY + (event.getY() - panStartY));
@@ -378,10 +563,97 @@ public final class ImageViewport extends Pane {
                 reportPixel(event);
             }
         });
+
         addEventHandler(MouseEvent.MOUSE_EXITED, event -> {
             selecting = false;
             onPixelExit.run();
         });
+
+        setOnContextMenuRequested(event -> {
+            showContextMenu(event.getScreenX(), event.getScreenY());
+            event.consume();
+        });
+    }
+
+    private void showContextMenu(double screenX, double screenY) {
+        ContextMenu menu = new ContextMenu();
+        MenuItem copyItem = new MenuItem("Copy displayed image");
+        copyItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN));
+        copyItem.setDisable(!hasContent());
+        copyItem.setOnAction(e -> {
+            if (onActionCopyImage != null) {
+                onActionCopyImage.run();
+            }
+        });
+
+        MenuItem saveItem = new MenuItem("Save displayed image as...");
+        saveItem.setAccelerator(new KeyCodeCombination(KeyCode.S, KeyCombination.SHORTCUT_DOWN));
+        saveItem.setDisable(!hasContent());
+        saveItem.setOnAction(e -> {
+            if (onActionSaveImage != null) {
+                onActionSaveImage.run();
+            }
+        });
+
+        MenuItem fitItem = new MenuItem("Fit to window");
+        fitItem.setAccelerator(new KeyCodeCombination(KeyCode.DIGIT0, KeyCombination.SHORTCUT_DOWN));
+        fitItem.setDisable(!hasContent());
+        fitItem.setOnAction(e -> fitToWindow());
+
+        MenuItem actualItem = new MenuItem("Actual size (1:1)");
+        actualItem.setAccelerator(new KeyCodeCombination(KeyCode.DIGIT1, KeyCombination.SHORTCUT_DOWN));
+        actualItem.setDisable(!hasContent());
+        actualItem.setOnAction(e -> actualSize());
+
+        menu.getItems().addAll(copyItem, saveItem, new SeparatorMenuItem(), fitItem, actualItem);
+
+        if (selection.isNotEmpty()) {
+            menu.getItems().add(new SeparatorMenuItem());
+            MenuItem scanSel = new MenuItem("Scan selection for barcodes");
+            scanSel.setAccelerator(new KeyCodeCombination(KeyCode.B, KeyCombination.SHORTCUT_DOWN, KeyCombination.SHIFT_DOWN));
+            scanSel.setOnAction(e -> {
+                if (onActionScanSelection != null) {
+                    onActionScanSelection.run();
+                }
+            });
+
+            MenuItem clearSel = new MenuItem("Clear selection");
+            clearSel.setAccelerator(new KeyCodeCombination(KeyCode.ESCAPE));
+            clearSel.setOnAction(e -> clearSelection());
+            menu.getItems().addAll(scanSel, clearSel);
+        } else if (hasContent()) {
+            menu.getItems().add(new SeparatorMenuItem());
+            MenuItem scanAll = new MenuItem("Scan image for barcodes");
+            scanAll.setAccelerator(new KeyCodeCombination(KeyCode.B, KeyCombination.SHORTCUT_DOWN));
+            scanAll.setOnAction(e -> {
+                if (onActionScanImage != null) {
+                    onActionScanImage.run();
+                }
+            });
+            menu.getItems().add(scanAll);
+        }
+
+        if (hasContent()) {
+            menu.getItems().add(new SeparatorMenuItem());
+            MenuItem nextT = new MenuItem("Next transform");
+            nextT.setAccelerator(new KeyCodeCombination(KeyCode.RIGHT));
+            nextT.setOnAction(e -> {
+                if (onActionNextTransform != null) {
+                    onActionNextTransform.run();
+                }
+            });
+
+            MenuItem prevT = new MenuItem("Previous transform");
+            prevT.setAccelerator(new KeyCodeCombination(KeyCode.LEFT));
+            prevT.setOnAction(e -> {
+                if (onActionPrevTransform != null) {
+                    onActionPrevTransform.run();
+                }
+            });
+            menu.getItems().addAll(prevT, nextT);
+        }
+
+        menu.show(this, screenX, screenY);
     }
 
     private void reportPixel(MouseEvent event) {

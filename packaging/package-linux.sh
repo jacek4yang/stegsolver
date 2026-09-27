@@ -51,10 +51,11 @@ PACKAGE_DIR="$OUT_DIR/packages"
 
 echo "==> Cleaning $OUT_DIR"
 rm -rf "$OUT_DIR"
-mkdir -p "$INPUT_DIR" "$MODULE_DIR" "$RUNTIME_DIR" "$PACKAGE_DIR"
+
 
 echo "==> Building the application jar"
 mvn -B -ntp $SKIP_TESTS clean package
+mkdir -p "$INPUT_DIR" "$MODULE_DIR" "$PACKAGE_DIR"
 
 echo "==> Collecting the runtime dependencies (ZXing) and the JavaFX modules"
 mvn -B -ntp -q dependency:copy-dependencies \
@@ -109,7 +110,9 @@ jpackage "${JPACKAGE_ARGS[@]}"
 
 echo "==> Verifying the packaged application starts"
 if [[ "$PACKAGE_TYPE" == "app-image" ]]; then
+  cp LICENSE README.md CHANGELOG.md "$PACKAGE_DIR/$APP_NAME/"
   "$PACKAGE_DIR/$APP_NAME/bin/$APP_NAME" --version
+  "$PACKAGE_DIR/$APP_NAME/bin/$APP_NAME" --self-test
 else
   echo "    Run the installed $APP_NAME to verify (a display is required)."
 fi

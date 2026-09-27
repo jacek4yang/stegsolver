@@ -49,8 +49,18 @@ public final class FrameBrowserPane implements ToolPane {
     private final Button loadButton = new Button("Load frames...");
     private final Button useDocumentButton = new Button("Use the open file");
 
+    private final java.util.concurrent.ExecutorService worker = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "stegsolver-frames");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final java.util.Set<FrameSource> openSources = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private boolean updatingSelection;
+    private volatile long generation;
+    private volatile long frameRequest;
+    private volatile boolean disposed;
     private FrameSource source;
-    private int currentFrame;
+    private int currentFrame = -1;
 
     public FrameBrowserPane(MainWindow window) {
         this.window = window;
@@ -84,41 +94,64 @@ public final class FrameBrowserPane implements ToolPane {
 
     @Override
     public Node content() {
-        Label hint = new Label("Frames are loaded lazily: only the frames you look at are decoded and kept "
-                + "in memory.");
+        Label hint = new Label("Frames are decoded on demand: only the frames you inspect are kept in memory.");
         hint.setWrapText(true);
         hint.getStyleClass().add("steg-hint");
 
+        status.setWrapText(true);
+        status.getStyleClass().addAll("mono", "steg-transform-label");
+
+        HBox sourceButtons = new HBox(6, useDocumentButton, loadButton);
+        sourceButtons.setAlignment(Pos.CENTER_LEFT);
+
+        VBox sourceCard = new VBox(8,
+                new Label("Frame Source"),
+                sourceButtons,
+                status);
+        sourceCard.getStyleClass().add("steg-card");
+
         HBox navigation = new HBox(6, previousButton, frameSpinner, nextButton);
         navigation.setAlignment(Pos.CENTER_LEFT);
-        VBox box = new VBox(10,
-                new HBox(6, useDocumentButton, loadButton),
-                status,
+
+        HBox frameActions = new HBox(6, saveButton, openAsDocumentButton);
+        frameActions.setAlignment(Pos.CENTER_LEFT);
+
+        VBox navCard = new VBox(8,
+                new Label("Frame Navigation"),
                 navigation,
-                new HBox(6, saveButton, openAsDocumentButton),
+                frameActions,
                 thumbnails,
                 hint);
+        navCard.getStyleClass().add("steg-card");
+
+        VBox box = new VBox(10, sourceCard, navCard);
         box.setPadding(new Insets(10));
         return box;
     }
 
     @Override
     public void onDocumentChanged() {
+        frameRequest++;
         updateButtons();
     }
 
     @Override
     public void dispose() {
         closeSource();
+        disposed = true;
+        worker.shutdown();
     }
 
     private void closeSource() {
-        if (source != null) {
-            source.close();
-            source = null;
-        }
+        generation++;
+        frameRequest++;
+        source = null;
+        if (!disposed) worker.execute(() -> {
+            for (FrameSource old : openSources) old.close();
+            openSources.clear();
+        });
         frameIndexes.clear();
-        currentFrame = 0;
+        currentFrame = -1;
         status.setText("No frame source loaded");
         updateButtons();
     }
@@ -139,24 +172,47 @@ public final class FrameBrowserPane implements ToolPane {
 
     private void load(Path path) {
         closeSource();
-        try {
-            source = FrameSource.open(path);
-        } catch (IOException e) {
-            FxUtils.error(window.window(), "Could not read the frames", String.valueOf(e), e);
-            return;
-        }
+        long request = generation;
+        status.setText("Reading frame headers...");
+        worker.execute(() -> {
+            try {
+                FrameSource opened = FrameSource.open(path);
+                openSources.add(opened);
+                if (disposed || request != generation) {
+                    opened.close();
+                    openSources.remove(opened);
+                    return;
+                }
+                javafx.application.Platform.runLater(() -> {
+                    if (disposed || request != generation) {
+                        // The source has no active reads yet, so closing it here cannot block.
+                        opened.close();
+                        openSources.remove(opened);
+                        return;
+                    }
+                    source = opened;
+                    installSource(path);
+                });
+            } catch (IOException | RuntimeException error) {
+                javafx.application.Platform.runLater(() -> {
+                    if (!disposed && request == generation)
+                        window.status("Could not read the frames: " + error);
+                });
+            }
+        });
+    }
+
+    private void installSource(Path path) {
         int count = source.frameCount();
         if (count > 0) {
             frameIndexes.setAll(java.util.stream.IntStream.range(0, count).boxed().toList());
             frameSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, count, 1));
             status.setText(path.getFileName() + " \u00b7 " + count + " frame(s) \u00b7 loaded lazily");
         } else {
-            // The reader cannot count the frames up front: discover them by probing.
-            int discovered = discoverFrameCount();
-            frameIndexes.setAll(java.util.stream.IntStream.range(0, discovered).boxed().toList());
-            frameSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1,
-                    Math.max(1, discovered), 1));
-            status.setText(path.getFileName() + " \u00b7 " + discovered + " frame(s) discovered by probing");
+            // Unknown-count readers remain usable without eagerly decoding every frame.
+            frameIndexes.setAll(0);
+            frameSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 1, 1));
+            status.setText(path.getFileName() + " - frame count unavailable");
         }
         updateButtons();
         if (!frameIndexes.isEmpty()) {
@@ -165,35 +221,36 @@ public final class FrameBrowserPane implements ToolPane {
         window.status("Loaded " + path.getFileName() + " with " + frameIndexes.size() + " frame(s)");
     }
 
-    /** Probes frames one at a time for readers that cannot report the frame count. */
-    private int discoverFrameCount() {
-        int index = 0;
-        int limit = 10_000;
-        while (index < limit) {
-            try {
-                source.frame(index);
-                index++;
-            } catch (IOException e) {
-                break;
-            }
-        }
-        return index;
-    }
-
     private void showFrame(int index) {
-        if (source == null || frameIndexes.isEmpty()) {
+        if (updatingSelection || source == null || frameIndexes.isEmpty()) {
+            return;
+        }
+        if (!source.hasKnownFrameCount() && index == frameIndexes.size()) {
+            FrameSource input = source;
+            submit(() -> input.frame(index), () -> true, frame -> {
+                frameIndexes.add(index);
+                frameSpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, frameIndexes.size(), index + 1));
+                showFrame(index);
+            }, error -> window.status("No further frame: " + error.getMessage()));
             return;
         }
         int count = frameIndexes.size();
         int wrapped = ((index % count) + count) % count;
         currentFrame = wrapped;
-        frameSpinner.getValueFactory().setValue(wrapped + 1);
-        thumbnails.getSelectionModel().select(wrapped);
+        updatingSelection = true;
+        try {
+            frameSpinner.getValueFactory().setValue(wrapped + 1);
+            thumbnails.getSelectionModel().select(wrapped);
+        } finally {
+            updatingSelection = false;
+        }
         int frameIndex = wrapped;
-        window.runImageJob("frame " + frameIndex, () -> source.frame(frameIndex), frame -> {
+        FrameSource input = source;
+        long request = ++frameRequest;
+        submit(() -> input.frame(frameIndex), () -> request == frameRequest, frame -> {
             window.showPreview(frame, "Frame " + (frameIndex + 1) + " of " + count);
             status.setText("Frame " + (frameIndex + 1) + " of " + count + " \u00b7 " + frame.width() + "x"
-                    + frame.height() + " \u00b7 " + source.cachedFrameCount() + " frame(s) in memory");
+                    + frame.height() + " \u00b7 " + input.cachedFrameCount() + " frame(s) in memory");
             updateButtons();
         }, error -> window.status("Could not decode the frame: " + error));
     }
@@ -203,9 +260,10 @@ public final class FrameBrowserPane implements ToolPane {
             return;
         }
         int frameIndex = currentFrame;
+        FrameSource input = source;
         FxUtils.chooseFileToSave(window.window(), "Save frame", "frame" + (frameIndex + 1) + ".png")
-                .ifPresent(path -> window.runImageJob("save frame " + frameIndex,
-                        () -> ImageIoUtil.save(source.frame(frameIndex), path),
+                .ifPresent(path -> submit(
+                        () -> ImageIoUtil.save(input.frame(frameIndex), path), () -> true,
                         outcome -> window.status(outcome.message(path)),
                         error -> FxUtils.error(window.window(), "Could not save the frame",
                                 String.valueOf(error), error)));
@@ -217,9 +275,10 @@ public final class FrameBrowserPane implements ToolPane {
         }
         int frameIndex = currentFrame;
         int count = frameIndexes.size();
-        window.runImageJob("frame as document", () -> source.frame(frameIndex), frame -> {
+        FrameSource input = source;
+        submit(() -> input.frame(frameIndex), () -> true, frame -> {
             window.document().openFromImage(frame, "frame " + (frameIndex + 1) + " of "
-                    + source.path().getFileName());
+                    + input.path().getFileName());
             window.showDocument();
             window.status("Opened frame " + (frameIndex + 1) + " of " + count + " as the document");
         }, error -> FxUtils.error(window.window(), "Could not open the frame", String.valueOf(error),
@@ -241,6 +300,7 @@ public final class FrameBrowserPane implements ToolPane {
     private final class ThumbnailCell extends ListCell<Integer> {
 
         private final ImageView image = new ImageView();
+        private volatile long request;
         private final Label caption = new Label();
 
         ThumbnailCell() {
@@ -257,6 +317,8 @@ public final class FrameBrowserPane implements ToolPane {
         @Override
         protected void updateItem(Integer index, boolean empty) {
             super.updateItem(index, empty);
+            long ticket = ++request;
+            image.setImage(null);
             if (empty || index == null || source == null) {
                 image.setImage(null);
                 caption.setText("");
@@ -264,8 +326,8 @@ public final class FrameBrowserPane implements ToolPane {
             }
             caption.setText("#" + (index + 1));
             int frameIndex = index;
-            window.runImageJob("thumbnail " + frameIndex,
-                    () -> source.thumbnail(frameIndex, THUMBNAIL_SIZE * 2),
+            FrameSource input = source;
+            submit(() -> input.thumbnail(frameIndex, THUMBNAIL_SIZE * 2), () -> ticket == request,
                     thumbnail -> {
                         if (getItem() != null && getItem() == frameIndex) {
                             image.setImage(FxUtils.toFxImage(thumbnail));
@@ -273,6 +335,25 @@ public final class FrameBrowserPane implements ToolPane {
                     },
                     error -> caption.setText("#" + (frameIndex + 1) + " failed"));
         }
+    }
+
+    private <T> void submit(io.github.jacek4yang.stegsolver.core.CoalescingJobRunner.Job<T> job,
+            java.util.function.BooleanSupplier current, java.util.function.Consumer<T> success,
+            java.util.function.Consumer<Throwable> failure) {
+        long ticket = generation;
+        worker.execute(() -> {
+            if (disposed || ticket != generation || !current.getAsBoolean()) return;
+            try {
+                T value = job.run();
+                javafx.application.Platform.runLater(() -> {
+                    if (!disposed && ticket == generation && current.getAsBoolean()) success.accept(value);
+                });
+            } catch (Exception error) {
+                javafx.application.Platform.runLater(() -> {
+                    if (!disposed && ticket == generation && current.getAsBoolean()) failure.accept(error);
+                });
+            }
+        });
     }
 
     /** Exposes the currently loaded frame data, used by tests and diagnostics. */

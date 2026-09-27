@@ -28,6 +28,10 @@ import javafx.scene.layout.VBox;
 public final class AnalysisPane implements ToolPane {
 
     private final MainWindow window;
+    private final io.github.jacek4yang.stegsolver.core.CoalescingJobRunner runner =
+            new io.github.jacek4yang.stegsolver.core.CoalescingJobRunner("stegsolver-analysis", javafx.application.Platform::runLater);
+
+    @Override public void dispose() { runner.close(); }
     private final TextArea reportArea = new TextArea();
     private final Label summaryLabel = new Label("Open an image, then run the analysis.");
     private final Label warningsLabel = new Label();
@@ -51,22 +55,38 @@ public final class AnalysisPane implements ToolPane {
 
     @Override
     public Node content() {
-        Button analyseButton = new Button("Analyse file");
+        Button analyseButton = new Button("Analyse File");
         analyseButton.setOnAction(event -> analyse());
-        Button copyButton = new Button("Copy report");
+        Button copyButton = new Button("Copy Report");
         copyButton.setOnAction(event -> FxUtils.copyText(reportArea.getText()));
-        Button saveButton = new Button("Save report...");
+        Button saveButton = new Button("Save Report...");
         saveButton.setOnAction(event -> saveReport());
 
         HBox buttons = new HBox(8, analyseButton, copyButton, saveButton);
-        VBox box = new VBox(8, buttons, warningsLabel, summaryLabel, reportArea);
+        buttons.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+        Label header = new Label("Container File Structure");
+        header.getStyleClass().add("steg-card-header");
+
+        summaryLabel.setWrapText(true);
+        summaryLabel.getStyleClass().add("steg-hint");
+
+        VBox topCard = new VBox(8, header, buttons, summaryLabel, warningsLabel);
+        topCard.getStyleClass().add("steg-card");
+
+        VBox reportCard = new VBox(6, new Label("Analysis Report"), reportArea);
+        reportCard.getStyleClass().add("steg-card");
         VBox.setVgrow(reportArea, Priority.ALWAYS);
+        VBox.setVgrow(reportCard, Priority.ALWAYS);
+
+        VBox box = new VBox(10, topCard, reportCard);
         box.setPadding(new Insets(10));
         return box;
     }
 
     @Override
     public void onDocumentChanged() {
+        runner.cancel();
         reportArea.clear();
         warningsLabel.setVisible(false);
         warningsLabel.setManaged(false);
@@ -83,10 +103,8 @@ public final class AnalysisPane implements ToolPane {
         }
         window.status("Analysing " + path.getFileName() + "...");
         // The analyser reads the whole file, so it runs on the background executor.
-        Thread.ofVirtual().name("stegsolver-analyse").start(() -> {
-            FileReport report = FileAnalyzer.analyze(path);
-            javafx.application.Platform.runLater(() -> show(report));
-        });
+        runner.submit("analyse", () -> FileAnalyzer.analyze(path), this::show,
+                error -> window.status("Analysis failed: " + error));
     }
 
     private void show(FileReport report) {

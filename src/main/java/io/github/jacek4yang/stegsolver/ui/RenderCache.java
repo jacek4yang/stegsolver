@@ -27,7 +27,7 @@ final class RenderCache {
 
     static long budgetFor(int width, int height) {
         long frame = 4L * width * height;
-        return Math.max(MIN_BUDGET_BYTES, Math.min(MAX_BUDGET_BYTES, frame * 6));
+        return Math.max(MIN_BUDGET_BYTES, Math.min(MAX_BUDGET_BYTES, Math.min(Runtime.getRuntime().maxMemory() / 8, frame * 6)));
     }
 
     /** Returns a cached render, or {@code null}. */

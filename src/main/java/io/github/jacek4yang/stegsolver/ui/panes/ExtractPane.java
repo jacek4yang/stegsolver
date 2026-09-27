@@ -12,7 +12,6 @@ import io.github.jacek4yang.stegsolver.extract.RgbOrder;
 import io.github.jacek4yang.stegsolver.ui.FxUtils;
 import io.github.jacek4yang.stegsolver.ui.MainWindow;
 import io.github.jacek4yang.stegsolver.ui.ToolPane;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.EnumMap;
@@ -43,6 +42,8 @@ import javafx.scene.layout.VBox;
 public final class ExtractPane implements ToolPane {
 
     private final MainWindow window;
+    private final io.github.jacek4yang.stegsolver.core.CoalescingJobRunner runner =
+            new io.github.jacek4yang.stegsolver.core.CoalescingJobRunner("stegsolver-extract", Platform::runLater);
     private final Map<Channel, CheckBox[]> planeBoxes = new EnumMap<>(Channel.class);
     private final Map<Channel, CheckBox> allBoxes = new EnumMap<>(Channel.class);
     private final ToggleGroup traversalGroup = new ToggleGroup();
@@ -90,7 +91,11 @@ public final class ExtractPane implements ToolPane {
         previewButton.setOnAction(event -> extract());
         saveBinaryButton.setOnAction(event -> saveBinary());
         saveTextButton.setOnAction(event -> saveText());
-        copyHexButton.setOnAction(event -> FxUtils.copyHex(extracted, 32));
+        copyHexButton.setOnAction(event -> {
+            int copied = FxUtils.copyHex(extracted, 32);
+            window.status("Copied hex for " + copied + " of " + extracted.length + " bytes"
+                    + (copied < extracted.length ? "; use Save binary or Save text for the complete extraction" : ""));
+        });
         // The controls have to exist before the default selection can be applied, so the grids are built
         // here and only assembled into the panel by content().
         planesGrid = buildPlanesGrid();
@@ -106,18 +111,35 @@ public final class ExtractPane implements ToolPane {
 
     @Override
     public Node content() {
-        preview.setPrefHeight(240);
-        VBox box = new VBox(10,
-                new Label("Bit planes to extract"),
+        preview.setPrefHeight(200);
+
+        VBox planesCard = new VBox(8,
+                section("Bit Planes to Extract"),
                 planesGrid,
-                quickSelectionRow(),
-                optionsGrid,
-                new HBox(8, previewButton, saveBinaryButton),
-                new HBox(8, saveTextButton, copyHexButton),
+                quickSelectionRow());
+        planesCard.getStyleClass().add("steg-card");
+
+        VBox optionsCard = new VBox(8,
+                section("Extraction Settings"),
+                optionsGrid);
+        optionsCard.getStyleClass().add("steg-card");
+
+        HBox actionRow = new HBox(8, previewButton, saveBinaryButton, saveTextButton, copyHexButton);
+        actionRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox previewControls = new HBox(8, new Label("Preview"), includeHex, previewLimit);
+        previewControls.setAlignment(Pos.CENTER_LEFT);
+
+        VBox resultsCard = new VBox(8,
+                section("Extracted Data & Preview"),
                 sizeLabel,
                 signatureLabel,
-                new HBox(8, new Label("Preview"), includeHex, previewLimit),
+                actionRow,
+                previewControls,
                 preview);
+        resultsCard.getStyleClass().add("steg-card");
+
+        VBox box = new VBox(10, planesCard, optionsCard, resultsCard);
         box.setPadding(new Insets(10));
         // The dock can be made narrow and short, so the panel scrolls instead of clipping its controls.
         ScrollPane scroll = new ScrollPane(box);
@@ -127,22 +149,39 @@ public final class ExtractPane implements ToolPane {
         return scroll;
     }
 
+    private static Label section(String title) {
+        Label header = new Label(title);
+        header.getStyleClass().add("steg-card-header");
+        return header;
+    }
+
     private GridPane buildPlanesGrid() {
         GridPane grid = new GridPane();
-        grid.setHgap(4);
-        grid.setVgap(3);
+        grid.setHgap(5);
+        grid.setVgap(4);
         grid.add(new Label(""), 0, 0);
-        grid.add(new Label("all"), 1, 0);
+        Label allHeader = new Label("All");
+        allHeader.getStyleClass().add("steg-hint");
+        grid.add(allHeader, 1, 0);
         for (int plane = 7; plane >= 0; plane--) {
-            Label header = new Label(String.valueOf(plane));
-            header.setMinWidth(22);
+            String colText = plane == 7 ? "7 (MSB)" : (plane == 0 ? "0 (LSB)" : String.valueOf(plane));
+            Label header = new Label(colText);
+            header.setMinWidth(plane == 7 || plane == 0 ? 38 : 20);
             header.setAlignment(Pos.CENTER);
+            header.getStyleClass().add("steg-hint");
             grid.add(header, 2 + (7 - plane), 0);
         }
         int row = 1;
         for (Channel channel : Channel.values()) {
             Label name = new Label(channel.label());
-            name.setMinWidth(48);
+            name.setMinWidth(46);
+            String channelClass = switch (channel) {
+                case ALPHA -> "steg-channel-alpha";
+                case RED -> "steg-channel-red";
+                case GREEN -> "steg-channel-green";
+                case BLUE -> "steg-channel-blue";
+            };
+            name.getStyleClass().add(channelClass);
             grid.add(name, 0, row);
             CheckBox all = new CheckBox();
             all.setTooltip(new javafx.scene.control.Tooltip("Select every " + channel.label() + " plane"));
@@ -184,12 +223,18 @@ public final class ExtractPane implements ToolPane {
 
     private Node quickSelectionRow() {
         Button lsb = new Button("RGB LSB");
+        lsb.getStyleClass().add("steg-pill-btn");
         lsb.setTooltip(new javafx.scene.control.Tooltip("Select the least significant bit of red, green "
                 + "and blue, where LSB steganography normally lives"));
         lsb.setOnAction(event -> applySelection(new int[] {1, 0, 2, 0, 3, 0}));
         Button alphaLsb = new Button("Alpha + RGB LSB");
+        alphaLsb.getStyleClass().add("steg-pill-btn");
         alphaLsb.setOnAction(event -> applySelection(new int[] {0, 0, 1, 0, 2, 0, 3, 0}));
+        Button msb = new Button("RGB MSB (7)");
+        msb.getStyleClass().add("steg-pill-btn");
+        msb.setOnAction(event -> applySelection(new int[] {1, 7, 2, 7, 3, 7}));
         Button everything = new Button("All 32");
+        everything.getStyleClass().add("steg-pill-btn");
         everything.setTooltip(new javafx.scene.control.Tooltip("Select all 32 bit planes"));
         everything.setOnAction(event -> {
             for (Channel channel : Channel.values()) {
@@ -201,8 +246,9 @@ public final class ExtractPane implements ToolPane {
             updateSizeLabel();
         });
         Button nothing = new Button("Clear");
+        nothing.getStyleClass().add("steg-pill-btn");
         nothing.setOnAction(event -> applySelection(new int[0]));
-        HBox row = new HBox(6, lsb, alphaLsb, everything, nothing);
+        HBox row = new HBox(5, lsb, alphaLsb, msb, everything, nothing);
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
     }
@@ -274,6 +320,8 @@ public final class ExtractPane implements ToolPane {
 
     @Override
     public void onDocumentChanged() {
+        runner.cancel();
+        extractionSequence++;
         extracted = new byte[0];
         lastOptions = null;
         preview.clear();
@@ -348,21 +396,27 @@ public final class ExtractPane implements ToolPane {
         int sequence = ++extractionSequence;
         previewButton.setDisable(true);
         window.status("Extracting...");
-        Thread.ofVirtual().name("stegsolver-extract").start(() -> {
+        runner.submit("extract", () -> {
             DataExtractor.Result result = DataExtractor.extract(image, region, options, Integer.MAX_VALUE);
-            // Classification is cheap compared to the extraction and gives the analyst an immediate hint.
-            PayloadInfo info = PayloadDetector.detect(result.data(), null);
-            Platform.runLater(() -> {
-                if (sequence != extractionSequence) {
-                    return;
-                }
-                extracted = result.data();
-                showPreview(info);
-                updateButtons(!result.isEmpty());
-                window.status("Extracted " + FxUtils.bytes(result.data().length) + " from "
-                        + options.selectedCount() + " plane(s)");
-            });
+            return new Extracted(result, PayloadDetector.detect(result.data(), null));
+        }, outcome -> {
+            if (sequence != extractionSequence) return;
+            extracted = outcome.result().data();
+            showPreview(outcome.info());
+            updateButtons(extracted.length > 0);
+            window.status("Extracted " + FxUtils.bytes(extracted.length) + " from "
+                    + options.selectedCount() + " plane(s)");
+        }, error -> {
+            updateButtons(false);
+            window.status("Extraction failed: " + error);
         });
+    }
+
+    private record Extracted(DataExtractor.Result result, PayloadInfo info) {}
+
+    @Override
+    public void dispose() {
+        runner.close();
     }
 
     private void showPreview(PayloadInfo info) {
@@ -397,15 +451,10 @@ public final class ExtractPane implements ToolPane {
         String suggested = window.document().isOpen()
                 ? window.document().fileName() + "-extract.bin"
                 : "extract.bin";
+        byte[] data = extracted;
         FxUtils.chooseFileToSave(window.window(), "Save extracted data", suggested, "bin", "Binary files")
-                .ifPresent(path -> {
-                    try {
-                        Files.write(path, extracted);
-                        window.status("Saved " + FxUtils.bytes(extracted.length) + " to " + path.getFileName());
-                    } catch (IOException e) {
-                        FxUtils.error(window.window(), "Could not save the data", String.valueOf(e), e);
-                    }
-                });
+                .ifPresent(path -> window.runFileJob(() -> Files.write(path, data),
+                        saved -> window.status("Saved " + FxUtils.bytes(data.length) + " to " + saved.getFileName())));
     }
 
     private void saveText() {
@@ -415,17 +464,14 @@ public final class ExtractPane implements ToolPane {
         String suggested = window.document().isOpen()
                 ? window.document().fileName() + "-extract.txt"
                 : "extract.txt";
+        byte[] data = extracted;
+        boolean hex = includeHex.isSelected();
         FxUtils.chooseFileToSave(window.window(), "Save extract preview", suggested, "txt", "Text files")
-                .ifPresent(path -> {
-                    try {
-                        String text = HexDump.format(extracted, 0, extracted.length, extracted.length,
-                                includeHex.isSelected());
-                        Files.writeString(path, text, StandardCharsets.UTF_8);
-                        window.status("Saved the preview to " + path.getFileName());
-                    } catch (IOException e) {
-                        FxUtils.error(window.window(), "Could not save the preview", String.valueOf(e), e);
+                .ifPresent(path -> window.runFileJob(() -> {
+                    try (var writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+                        HexDump.write(writer, data, hex);
                     }
-                });
+                    return path;
+                }, saved -> window.status("Saved the preview to " + saved.getFileName())));
     }
-
 }

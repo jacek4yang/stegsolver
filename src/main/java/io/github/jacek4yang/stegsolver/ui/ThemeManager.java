@@ -1,7 +1,5 @@
 package io.github.jacek4yang.stegsolver.ui;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -42,6 +40,8 @@ public final class ThemeManager {
     private Theme theme = Theme.SYSTEM;
     private boolean dark;
 
+    private final java.util.List<java.util.function.Consumer<Boolean>> darkChangeListeners = new java.util.ArrayList<>();
+
     public ThemeManager(Scene scene) {
         this.scene = scene;
     }
@@ -55,13 +55,26 @@ public final class ThemeManager {
         return dark;
     }
 
+    public void addDarkChangeListener(java.util.function.Consumer<Boolean> listener) {
+        darkChangeListeners.add(listener);
+        listener.accept(this.dark);
+    }
+
     /** Applies a theme, resolving {@link Theme#SYSTEM} through the desktop's own preference. */
     public void apply(Theme requested) {
         this.theme = requested;
         boolean useDark = switch (requested) {
             case DARK -> true;
             case LIGHT -> false;
-            case SYSTEM -> systemPrefersDark();
+            case SYSTEM -> {
+                String override = System.getProperty("stegsolver.theme");
+                if ("dark".equalsIgnoreCase(override)) {
+                    yield true;
+                } else if ("light".equalsIgnoreCase(override)) {
+                    yield false;
+                }
+                yield systemPrefersDark();
+            }
         };
         this.dark = useDark;
         scene.getStylesheets().removeIf(stylesheet -> stylesheet.contains("/theme/light.css")
@@ -70,6 +83,9 @@ public final class ThemeManager {
         var resource = ThemeManager.class.getResource(stylesheet);
         if (resource != null) {
             scene.getStylesheets().add(resource.toExternalForm());
+        }
+        for (var listener : darkChangeListeners) {
+            listener.accept(useDark);
         }
     }
 
@@ -129,19 +145,14 @@ public final class ThemeManager {
         Process process = null;
         try {
             process = new ProcessBuilder(command).redirectErrorStream(true).start();
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append('\n');
-                }
-            }
             if (!process.waitFor(2, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 return null;
             }
-            return process.exitValue() == 0 ? output.toString().trim() : null;
+            try (var input = process.getInputStream()) {
+                String output = new String(input.readNBytes(16_384), StandardCharsets.UTF_8);
+                return process.exitValue() == 0 ? output.trim() : null;
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;

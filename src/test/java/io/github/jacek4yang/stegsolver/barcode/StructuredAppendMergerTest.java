@@ -58,7 +58,8 @@ class StructuredAppendMergerTest {
         assertEquals("first second third", merged.text());
         assertEquals(1, notes.size(), () -> "notes: " + notes);
         assertTrue(notes.get(0).contains("complete structured append sequence of 3"), notes.toString());
-        assertEquals(3, merged.structuredAppend().total());
+        assertEquals("3", merged.metadata().get("structuredAppendTotal"));
+        assertNull(merged.structuredAppend());
     }
 
     @Test
@@ -131,6 +132,31 @@ class StructuredAppendMergerTest {
         System.arraycopy(second, 0, expected, 128, 128);
         assertArrayEquals(expected, merged.payload());
         assertEquals(256, merged.payloadSize());
+    }
+
+    @Test void incompletePartsRemainAvailableForLaterScans() {
+        var first = hit(0, 2, 7, new byte[] {1}, "a");
+        var outcome = StructuredAppendMerger.merge(List.of(first));
+        assertTrue(outcome.merged().isEmpty());
+        assertEquals(List.of(first), outcome.unmerged());
+    }
+
+    @Test void conflictingPartsAreNeverSilentlyDiscarded() {
+        var outcome = StructuredAppendMerger.merge(List.of(
+                hit(0, 2, 7, new byte[] {1}, "a"),
+                hit(0, 2, 7, new byte[] {2}, "b"),
+                hit(1, 2, 7, new byte[] {3}, "c")));
+        assertTrue(outcome.merged().isEmpty());
+        assertEquals(3, outcome.unmerged().size());
+    }
+
+    @Test void completeMergeIsIdempotent() {
+        var first = StructuredAppendMerger.merge(List.of(
+                hit(0, 2, 7, new byte[] {1}, "a"), hit(1, 2, 7, new byte[] {2}, "b")));
+        assertNull(first.merged().getFirst().structuredAppend());
+        var second = StructuredAppendMerger.merge(first.merged());
+        assertTrue(second.merged().isEmpty());
+        assertArrayEquals(new byte[] {1, 2}, second.unmerged().getFirst().payload());
     }
 
     private static BarcodeHit hit(int index, int total, int parity, byte[] payload, String text) {

@@ -2,6 +2,7 @@ package io.github.jacek4yang.stegsolver.core;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.imageio.ImageIO;
@@ -27,7 +28,12 @@ public final class FrameSource implements AutoCloseable {
     private final int frameCount;
     private final int cacheSize;
     private final Map<Integer, ImageData> frameCache = new LinkedHashMap<>(8, 0.75f, true);
-    private final Map<Integer, ImageData> thumbnailCache = new LinkedHashMap<>(32, 0.75f, true);
+    private record ThumbnailKey(int index, int size) {}
+    private boolean closed;
+    private long cachedBytes;
+    private volatile int cachedCount;
+    private final long cacheBudget = Math.min(128L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 16);
+    private final Map<ThumbnailKey, ImageData> thumbnailCache = new LinkedHashMap<>(32, 0.75f, true);
 
     private FrameSource(Path path, ImageReader reader, ImageInputStream stream, int frameCount,
             int cacheSize) {
@@ -48,8 +54,19 @@ public final class FrameSource implements AutoCloseable {
     }
 
     public static FrameSource open(Path path, int cacheSize) throws IOException {
+        return open(path, cacheSize, true);
+    }
+
+    static FrameSource openFirst(Path path) throws IOException {
+        return open(path, 1, false);
+    }
+
+    private static FrameSource open(Path path, int cacheSize, boolean countFrames) throws IOException {
         if (path == null) {
             throw new IOException("No file given");
+        }
+        if (!Files.isRegularFile(path) || Files.size(path) > ImageIoUtil.MAX_FILE_BYTES) {
+            throw new IOException("Missing file or file exceeds the size limit");
         }
         ImageInputStream stream = ImageIO.createImageInputStream(path.toFile());
         if (stream == null) {
@@ -65,7 +82,7 @@ public final class FrameSource implements AutoCloseable {
         int frameCount;
         try {
             // allowSearch = true, because some readers need to scan the file to count the images.
-            frameCount = reader.getNumImages(true);
+            frameCount = countFrames ? reader.getNumImages(true) : 1;
         } catch (IOException | RuntimeException e) {
             frameCount = -1;
         }
@@ -86,7 +103,7 @@ public final class FrameSource implements AutoCloseable {
     }
 
     /** Width of a frame without decoding it, or {@code -1} when unavailable. */
-    public int frameWidth(int index) {
+    public synchronized int frameWidth(int index) {
         try {
             return reader.getWidth(index);
         } catch (IOException | RuntimeException e) {
@@ -94,7 +111,7 @@ public final class FrameSource implements AutoCloseable {
         }
     }
 
-    public int frameHeight(int index) {
+    public synchronized int frameHeight(int index) {
         try {
             return reader.getHeight(index);
         } catch (IOException | RuntimeException e) {
@@ -103,7 +120,8 @@ public final class FrameSource implements AutoCloseable {
     }
 
     /** Decodes a frame, using the bounded cache. */
-    public ImageData frame(int index) throws IOException {
+    public synchronized ImageData frame(int index) throws IOException {
+        if (closed) throw new IOException("Frame source is closed");
         if (index < 0) {
             throw new IOException("Frame index must not be negative: " + index);
         }
@@ -114,30 +132,42 @@ public final class FrameSource implements AutoCloseable {
         if (cached != null) {
             return cached;
         }
-        var image = reader.read(index);
+        java.awt.image.BufferedImage image;
+        try {
+            ImageIoUtil.checkDimensions(reader.getWidth(index), reader.getHeight(index));
+            image = reader.read(index);
+        } catch (RuntimeException e) {
+            throw new IOException("Malformed frame " + index, e);
+        }
         if (image == null) {
             throw new IOException("Frame " + index + " could not be decoded");
         }
         ImageData data = ImageData.fromBufferedImage(image);
+        if (data.estimatedBytes() > cacheBudget) return data;
         frameCache.put(index, data);
-        while (frameCache.size() > cacheSize) {
+        cachedBytes += data.estimatedBytes();
+        while (frameCache.size() > cacheSize || cachedBytes > cacheBudget) {
             var iterator = frameCache.entrySet().iterator();
-            iterator.next();
+            cachedBytes -= iterator.next().getValue().estimatedBytes();
             iterator.remove();
         }
+        cachedCount = frameCache.size();
         return data;
     }
 
     /** A cached downscaled preview of a frame, cheap enough for a thumbnail strip. */
-    public ImageData thumbnail(int index, int maxSize) throws IOException {
-        ImageData cached = thumbnailCache.get(index);
+    public synchronized ImageData thumbnail(int index, int maxSize) throws IOException {
+        if (closed) throw new IOException("Frame source is closed");
+        if (maxSize <= 0 || maxSize > 512) throw new IllegalArgumentException("Thumbnail size must be 1..512");
+        ThumbnailKey key = new ThumbnailKey(index, maxSize);
+        ImageData cached = thumbnailCache.get(key);
         if (cached != null) {
             return cached;
         }
         ImageData full = frame(index);
         int longest = Math.max(full.width(), full.height());
         ImageData thumbnail = longest <= maxSize ? full : ImageOps.scaleNearest(full, maxSize / (double) longest);
-        thumbnailCache.put(index, thumbnail);
+        thumbnailCache.put(key, thumbnail);
         if (thumbnailCache.size() > 64) {
             var iterator = thumbnailCache.entrySet().iterator();
             iterator.next();
@@ -148,11 +178,15 @@ public final class FrameSource implements AutoCloseable {
 
     /** Number of full size frames currently held in memory, used in diagnostics. */
     public int cachedFrameCount() {
-        return frameCache.size();
+        return cachedCount;
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
+        if (closed) return;
+        closed = true;
+        cachedBytes = 0;
+        cachedCount = 0;
         frameCache.clear();
         thumbnailCache.clear();
         try {

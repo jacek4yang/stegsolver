@@ -83,7 +83,7 @@ public final class ByteReader {
     /** Printable ASCII rendering of a range; unprintable bytes become '.'. */
     public String ascii(int offset, int length) {
         int from = Math.max(0, offset);
-        int count = Math.max(0, Math.min(length, data.length - from));
+        int count = Math.max(0, Math.min(4096, Math.min(length, data.length - from)));
         StringBuilder out = new StringBuilder(count);
         for (int i = 0; i < count; i++) {
             int c = data[from + i] & 0xff;
@@ -95,7 +95,7 @@ public final class ByteReader {
     /** Printable ASCII rendering, stopping at the first NUL byte (PNG/GIF keywords, comments). */
     public String asciiUntilNul(int offset, int length) {
         int from = Math.max(0, offset);
-        int count = Math.max(0, Math.min(length, data.length - from));
+        int count = Math.max(0, Math.min(4096, Math.min(length, data.length - from)));
         StringBuilder out = new StringBuilder(count);
         for (int i = 0; i < count; i++) {
             int c = data[from + i] & 0xff;

@@ -70,6 +70,7 @@ public final class DataExtractor {
 
         if (options.rowFirst()) {
             for (int y = area.y(); y < area.maxY(); y++) {
+                if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
                 int rowStart = y * imageWidth;
                 for (int x = area.x(); x < area.maxX(); x++) {
                     if (sink.isFull()) {
@@ -80,6 +81,7 @@ public final class DataExtractor {
             }
         } else {
             for (int x = area.x(); x < area.maxX(); x++) {
+                if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
                 for (int y = area.y(); y < area.maxY(); y++) {
                     if (sink.isFull()) {
                         return truncated(sink, totalBytes);
@@ -128,46 +130,37 @@ public final class DataExtractor {
 
         private final byte[] out;
         private int bytePos;
-        private int bitMask = 128;
-        private int current;
+        private long pendingBits;
+        private int bitCount;
 
         BitSink(int capacity) {
             this.out = new byte[capacity];
         }
 
-        /** True when the byte budget is used up and the traversal can stop. */
         boolean isFull() {
             return bytePos >= out.length;
         }
 
         void putPixel(int pixel, int[] plan, boolean invert) {
+            if (invert) pixel = ~pixel;
+            int packed = 0;
             for (int bit : plan) {
-                int value = (pixel >>> bit) & 1;
-                if (invert) {
-                    value ^= 1;
-                }
-                if (value != 0) {
-                    current |= bitMask;
-                }
-                bitMask >>= 1;
-                if (bitMask == 0) {
-                    out[bytePos++] = (byte) current;
-                    current = 0;
-                    bitMask = 128;
-                    if (isFull()) {
-                        return;
-                    }
-                }
+                packed = (packed << 1) | ((pixel >>> bit) & 1);
             }
+            pendingBits = (pendingBits << plan.length) | (packed & 0xffffffffL);
+            bitCount += plan.length;
+            while (bitCount >= 8 && !isFull()) {
+                bitCount -= 8;
+                out[bytePos++] = (byte) (pendingBits >>> bitCount);
+            }
+            pendingBits &= (1L << bitCount) - 1;
         }
 
         byte[] finish() {
-            if (bitMask != 128 && bytePos < out.length) {
-                out[bytePos++] = (byte) current;
+            if (bitCount > 0 && !isFull()) {
+                out[bytePos++] = (byte) (pendingBits << (8 - bitCount));
             }
-            byte[] result = new byte[Math.min(bytePos, out.length)];
-            System.arraycopy(out, 0, result, 0, result.length);
-            return result;
+            return bytePos == out.length ? out : java.util.Arrays.copyOf(out, bytePos);
         }
     }
 }

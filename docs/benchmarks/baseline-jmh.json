@@ -1,0 +1,100 @@
+[
+  {
+    "benchmark": "AnalysisBenchmark.combineInterlaceRows",
+    "size": "1024",
+    "score": 1.5699290446234542,
+    "error": 0.18034973281881117,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "AnalysisBenchmark.combineXor",
+    "size": "1024",
+    "score": 3.3839950521910027,
+    "error": 0.18338961099616516,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "AnalysisBenchmark.extractAllPlanes",
+    "size": "1024",
+    "score": 146.10870285714287,
+    "error": 3.2962170196029548,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "AnalysisBenchmark.extractLsb",
+    "size": "1024",
+    "score": 18.774582168350168,
+    "error": 0.6238914571417554,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "AnalysisBenchmark.scanSingleQrCode",
+    "size": "1024",
+    "score": 31.33609609848485,
+    "error": 2.3524378643134214,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "AnalysisBenchmark.stereoOffset",
+    "size": "1024",
+    "score": 0.8059231135302689,
+    "error": 0.14708342377587505,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "AnalysisBenchmark.stereoSearch",
+    "size": "1024",
+    "score": 22.409716321513002,
+    "error": 1.7167837463038493,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "TransformBenchmark.bitPlane",
+    "size": "1024",
+    "score": 0.6347686694604305,
+    "error": 0.04834482958056179,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "TransformBenchmark.cachedLookup",
+    "size": "1024",
+    "score": 6.446662286358588e-06,
+    "error": 5.92015611905716e-07,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "TransformBenchmark.fullChannelMask",
+    "size": "1024",
+    "score": 0.615290052281994,
+    "error": 0.4408635441461474,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "TransformBenchmark.grayPixels",
+    "size": "1024",
+    "score": 0.6924001299406806,
+    "error": 0.048709008131826374,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "TransformBenchmark.invert",
+    "size": "1024",
+    "score": 0.4977559025542281,
+    "error": 0.006952761431913142,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "TransformBenchmark.randomComponentMap",
+    "size": "1024",
+    "score": 0.49115505227178363,
+    "error": 0.017226276005991317,
+    "unit": "ms/op"
+  },
+  {
+    "benchmark": "TransformBenchmark.transformStepCacheMiss",
+    "size": "1024",
+    "score": 0.675837342978188,
+    "error": 0.4958555846221344,
+    "unit": "ms/op"
+  }
+]

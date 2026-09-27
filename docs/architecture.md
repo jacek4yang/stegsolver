@@ -56,9 +56,9 @@ image is written with ImageIO (which is the only image codec available in the JD
 
 Two bounded caches, both sized from the image:
 
-* `TransformEngine` caches transform pixel arrays (an LRU map with a byte budget of about eight
-  frames). A cache hit is what stepping back to the previous plane costs.
-* `RenderCache` caches the JavaFX images produced from those arrays (about six frames).
+* `TransformEngine` caches transform pixel arrays (an LRU map with a byte budget of up to eight
+  frames, capped by heap size). A cache hit is what stepping back to the previous plane costs.
+* `RenderCache` caches the JavaFX images produced from those arrays (up to six frames, capped by heap size).
 
 Neither cache can grow without bound, which matters because a 12 megapixel image costs roughly 48 MB
 per transform.
@@ -103,3 +103,16 @@ corrupting the primary document/file state": combine reads the displayed image, 
   the same transform looked different each time. The rewrite uses a fixed seed per variant, which
   makes the transform cacheable, comparable and reproducible. The mapping arithmetic itself is
   unchanged and verified against the legacy code.
+
+## Stabilization constraints
+
+Decode once off the JavaFX thread and install the resulting pixels. Every coalesced callback
+checks its generation again on the delivery thread; cancellation interrupts cooperative workers.
+Scans snapshot all control values before dispatch. Frame access is serialized, thumbnails have
+independent request identities, and source disposal runs off JavaFX. Explicit file saves use a
+separate queue and finish during shutdown instead of being dropped by navigation.
+
+Images are checked before decoding against `min(64 million pixels, maximum heap / 64)`;
+files are limited to 512 MiB. Full frames have both a six-entry and 128 MiB/heap-based budget.
+Thumbnail caching is limited to 64 entries with a maximum requested side of 512 pixels.
+Reports stop retaining detail after 10,000 entries; untrusted text fields are bounded.

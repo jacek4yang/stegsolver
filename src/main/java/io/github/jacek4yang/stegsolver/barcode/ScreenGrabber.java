@@ -66,7 +66,7 @@ public final class ScreenGrabber {
     }
 
     /**
-     * Captures the given device rectangle.
+     * Captures the given logical screen rectangle at the monitor native resolution.
      *
      * @throws IllegalStateException when the environment cannot provide the pixels
      */
@@ -79,7 +79,10 @@ public final class ScreenGrabber {
                     + sessionDescription() + "). On Wayland the compositor does not allow reading other "
                     + "windows' pixels.");
         }
-        Rectangle screenBounds = primaryScreenBounds();
+        GraphicsDevice selected = java.util.Arrays.stream(GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices())
+                .filter(device -> device.getDefaultConfiguration().getBounds().contains(deviceRectangle.getCenterX(), deviceRectangle.getCenterY()))
+                .findFirst().orElse(GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice());
+        Rectangle screenBounds = selected.getDefaultConfiguration().getBounds();
         Rectangle clipped = screenBounds == null ? deviceRectangle
                 : deviceRectangle.intersection(screenBounds);
         if (clipped.width <= 0 || clipped.height <= 0) {
@@ -87,8 +90,9 @@ public final class ScreenGrabber {
                     + " does not overlap the screen " + screenBounds);
         }
         try {
-            Robot robot = new Robot();
-            BufferedImage image = robot.createScreenCapture(clipped);
+            Robot robot = new Robot(selected);
+            var variants = robot.createMultiResolutionScreenCapture(clipped).getResolutionVariants();
+            BufferedImage image = (BufferedImage) variants.get(variants.size() - 1);
             return ImageData.fromBufferedImage(image);
         } catch (java.awt.AWTException | RuntimeException e) {
             throw new IllegalStateException("Screen capture failed: " + e, e);

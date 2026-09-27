@@ -6,6 +6,7 @@ name: Package
 on:
   push:
     tags: ['v*']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +15,8 @@ permissions:
 jobs:
   linux:
     name: Linux application image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -29,7 +31,7 @@ jobs:
       # Invoked through bash explicitly: the repository does record the executable bit, but a workflow
       # should not depend on a file mode surviving every checkout and archive round trip.
       - name: Build the application image
-        run: bash packaging/package-linux.sh --skip-tests
+        run: bash packaging/package-linux.sh
 
       - name: Verify the runtime image contains JavaFX
         run: |
@@ -42,6 +44,12 @@ jobs:
           target/dist/packages/StegSolver/bin/StegSolver --version
           # The self test runs every engine layer through the bundled runtime, without a display.
           target/dist/packages/StegSolver/bin/StegSolver --self-test
+
+      - name: Verify packaged JavaFX on X11
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb libgtk-3-0
+          env -u JAVA_HOME -u JDK_HOME JAVA_TOOL_OPTIONS=-Dstegsolver.smokeTest=true \
+            xvfb-run -a target/dist/packages/StegSolver/bin/StegSolver docs/screenshot.png
 
       - name: Package the artifact
         run: |
@@ -58,6 +66,7 @@ jobs:
   windows:
     name: Windows application image
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -89,7 +98,7 @@ jobs:
           function Invoke-PackagedApp {
               param([string]$Executable, [string[]]$Arguments = @())
               $process = Start-Process -FilePath $Executable -ArgumentList $Arguments -Wait `
-                  -PassThru -NoNewWindow
+                  -PassThru -WindowStyle Hidden
               return $process.ExitCode
           }
           $launcher = 'target\dist\packages\StegSolver\StegSolver.exe'
@@ -101,6 +110,18 @@ jobs:
               throw "The self test failed in the packaged application (exit code $selfTestExit)"
           }
           Write-Host 'The packaged launcher starts and passes the self test.'
+
+      - name: Verify packaged JavaFX without installed Java
+        shell: pwsh
+        run: |
+          $env:JAVA_HOME = $null
+          $env:JDK_HOME = $null
+          $env:JAVA_TOOL_OPTIONS = '-Dstegsolver.smokeTest=true -Dprism.order=sw'
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $app = (Resolve-Path target/dist/packages/StegSolver/StegSolver.exe).Path
+          $image = (Resolve-Path docs/screenshot.png).Path
+          $process = Start-Process -FilePath $app -ArgumentList $image -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw 'Packaged JavaFX smoke test failed' }
 
       - name: Package the artifact
         shell: pwsh

@@ -10,7 +10,7 @@ import java.util.Map;
 /**
  * Merges the parts of a QR Structured Append sequence.
  *
- * <p>ZXing merges the parts that are found inside a single scan, but a sequence can also be spread over
+ * <p>The scanner preserves individual parts. A sequence can be spread over
  * several images, several regions of one image or several scans of a screen. This utility merges the
  * parts of the results collected so far, in the right order, keeping the payload bytes exact: the
  * payload of the merged symbol is the concatenation of the parts' {@code BYTE_SEGMENTS} and is never
@@ -37,7 +37,7 @@ public final class StructuredAppendMerger {
                 unmerged.add(hit);
                 continue;
             }
-            byParity.computeIfAbsent(hit.structuredAppend().parity(), key -> new ArrayList<>()).add(hit);
+            byParity.computeIfAbsent((hit.structuredAppend().parity() << 5) | hit.structuredAppend().total(), key -> new ArrayList<>()).add(hit);
         }
 
         List<BarcodeHit> merged = new ArrayList<>();
@@ -48,9 +48,28 @@ public final class StructuredAppendMerger {
                 unmerged.add(parts.get(0));
                 continue;
             }
+            if (!completeAndUnambiguous(parts)) {
+                unmerged.addAll(parts);
+                notes.add("Kept incomplete or conflicting Structured Append parts separate; no payload was guessed");
+                continue;
+            }
             merged.add(mergeSequence(parts, notes));
         }
         return new MergeOutcome(merged, unmerged, notes);
+    }
+
+    private static boolean completeAndUnambiguous(List<BarcodeHit> parts) {
+        Map<Integer, BarcodeHit> slots = new LinkedHashMap<>();
+        StructuredAppend header = parts.get(0).structuredAppend();
+        for (BarcodeHit part : parts) {
+            StructuredAppend sa = part.structuredAppend();
+            if (sa.index() < 0 || sa.index() >= sa.total() || sa.total() > 16
+                    || sa.total() != header.total() || sa.parity() != header.parity()) return false;
+            BarcodeHit old = slots.putIfAbsent(sa.index(), part);
+            if (old != null && (!java.util.Arrays.equals(old.payload(), part.payload())
+                    || !java.util.Objects.equals(old.text(), part.text()))) return false;
+        }
+        return slots.size() == header.total();
     }
 
     /** Merges one sequence, which may be partial. */
@@ -126,7 +145,7 @@ public final class StructuredAppendMerger {
                 Map.of("structuredAppend", "merged from " + ordered.size() + " symbols",
                         "structuredAppendTotal", String.valueOf(total),
                         "structuredAppendParity", "0x" + Integer.toHexString(parity)),
-                new StructuredAppend(0, total, parity, (total - 1) & 0x0f),
+                null,
                 PayloadDetector.detect(mergedPayload, mergedText));
     }
 

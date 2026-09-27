@@ -44,11 +44,19 @@ public final class ImageIoUtil {
             throw new IOException("File is larger than the " + (MAX_FILE_BYTES / (1024 * 1024)) + " MiB limit: "
                     + path.getFileName());
         }
-        var image = ImageIO.read(path.toFile());
-        if (image == null) {
-            throw new IOException("Unsupported or corrupt image format: " + path.getFileName());
+        try (var source = FrameSource.openFirst(path)) {
+            return source.frame(0);
         }
-        return ImageData.fromBufferedImage(image);
+    }
+
+    /** Bounds decoded allocations before ImageIO sees pixel data, including compressed bombs. */
+    public static void checkDimensions(int width, int height) throws IOException {
+        long pixels = (long) width * height;
+        long limit = Math.min(64_000_000L, Runtime.getRuntime().maxMemory() / 64);
+        if (width <= 0 || height <= 0 || pixels > limit) {
+            throw new IOException("Image dimensions " + width + "x" + height
+                    + " exceed the decoded image limit of " + limit + " pixels");
+        }
     }
 
     /**

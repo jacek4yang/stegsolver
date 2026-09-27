@@ -22,7 +22,7 @@ class CoalescingJobRunnerTest {
     @DisplayName("a single job delivers its result")
     void singleJob() throws Exception {
         try (CoalescingJobRunner runner = new CoalescingJobRunner("test", DIRECT)) {
-            List<Integer> results = new ArrayList<>();
+            List<Integer> results = new java.util.concurrent.CopyOnWriteArrayList<>();
             runner.submit("one", () -> 42, results::add, error -> {
                 throw new AssertionError(error);
             });
@@ -36,16 +36,22 @@ class CoalescingJobRunnerTest {
     @DisplayName("rapid submissions only deliver the newest result")
     void newestResultWins() throws Exception {
         CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch started = new CountDownLatch(1);
         AtomicInteger computed = new AtomicInteger();
-        List<Integer> results = new ArrayList<>();
+        List<Integer> results = new java.util.concurrent.CopyOnWriteArrayList<>();
         try (CoalescingJobRunner runner = new CoalescingJobRunner("test", DIRECT)) {
             runner.submit("slow", () -> {
-                release.await(5, TimeUnit.SECONDS);
+                started.countDown();
+                while (release.getCount() > 0) {
+                    try { release.await(5, TimeUnit.SECONDS); }
+                    catch (InterruptedException ignored) { /* hold the worker to test queue coalescing */ }
+                }
                 computed.incrementAndGet();
                 return 1;
             }, results::add, error -> {
                 throw new AssertionError(error);
             });
+            assertTrue(started.await(5, TimeUnit.SECONDS));
             for (int i = 2; i <= 20; i++) {
                 int value = i;
                 runner.submit("job " + value, () -> {
@@ -69,7 +75,7 @@ class CoalescingJobRunnerTest {
     @Test
     @DisplayName("failures of the newest job are reported")
     void failuresAreReported() throws Exception {
-        List<Throwable> failures = new ArrayList<>();
+        List<Throwable> failures = new java.util.concurrent.CopyOnWriteArrayList<>();
         try (CoalescingJobRunner runner = new CoalescingJobRunner("test", DIRECT)) {
             runner.submit("boom", () -> {
                 throw new IllegalStateException("nope");
@@ -85,8 +91,8 @@ class CoalescingJobRunnerTest {
     @Test
     @DisplayName("a failure of a superseded job is not reported")
     void staleFailuresAreIgnored() throws Exception {
-        List<Throwable> failures = new ArrayList<>();
-        List<Integer> results = new ArrayList<>();
+        List<Throwable> failures = new java.util.concurrent.CopyOnWriteArrayList<>();
+        List<Integer> results = new java.util.concurrent.CopyOnWriteArrayList<>();
         CountDownLatch release = new CountDownLatch(1);
         try (CoalescingJobRunner runner = new CoalescingJobRunner("test", DIRECT)) {
             runner.submit("stale failure", () -> {
@@ -116,6 +122,59 @@ class CoalescingJobRunnerTest {
         });
         assertEquals(0, runner.submittedCount());
         assertFalse(Thread.currentThread().isInterrupted());
+    }
+
+    @Test
+    void staleQueuedSuccessIsNotDelivered() throws Exception {
+        var queue = new java.util.concurrent.LinkedBlockingQueue<Runnable>();
+        var results = new ArrayList<Integer>();
+        try (var runner = new CoalescingJobRunner("test", queue::add)) {
+            runner.submit("old", () -> 1, results::add, error -> {});
+            Runnable old = queue.poll(5, TimeUnit.SECONDS);
+            org.junit.jupiter.api.Assertions.assertNotNull(old);
+            runner.submit("new", () -> 2, results::add, error -> {});
+            old.run();
+            queue.poll(5, TimeUnit.SECONDS).run();
+            assertEquals(List.of(2), results);
+        }
+    }
+
+    @Test
+    void cancelAndCloseSuppressQueuedFailures() throws Exception {
+        var queue = new java.util.concurrent.LinkedBlockingQueue<Runnable>();
+        var failures = new ArrayList<Throwable>();
+        try (var runner = new CoalescingJobRunner("test", queue::add)) {
+            runner.submit("failure", () -> { throw new IllegalStateException(); }, result -> {}, failures::add);
+            Runnable callback = queue.poll(5, TimeUnit.SECONDS);
+            org.junit.jupiter.api.Assertions.assertNotNull(callback);
+            runner.cancel();
+            callback.run();
+            assertTrue(failures.isEmpty());
+            runner.submit("close", () -> 1, result -> failures.add(new Exception()), failures::add);
+            callback = queue.poll(5, TimeUnit.SECONDS);
+            org.junit.jupiter.api.Assertions.assertNotNull(callback);
+            runner.close();
+            callback.run();
+            assertTrue(failures.isEmpty());
+        }
+    }
+
+    @Test void supersededWorkReceivesInterruption() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+        CountDownLatch delivered = new CountDownLatch(1);
+        try (var runner = new CoalescingJobRunner("test", DIRECT)) {
+            runner.submit("old", () -> {
+                started.countDown();
+                try { new CountDownLatch(1).await(); }
+                catch (InterruptedException expected) { interrupted.countDown(); }
+                return 1;
+            }, value -> {}, error -> {});
+            assertTrue(started.await(5, TimeUnit.SECONDS));
+            runner.submit("new", () -> 2, value -> delivered.countDown(), error -> {});
+            assertTrue(interrupted.await(5, TimeUnit.SECONDS));
+            assertTrue(delivered.await(5, TimeUnit.SECONDS));
+        }
     }
 
     private static void waitFor(java.util.function.BooleanSupplier condition) throws InterruptedException {

@@ -55,7 +55,7 @@ function Invoke-PackagedApp {
         [Parameter(Mandatory = $true)][string]$Executable,
         [string[]]$Arguments = @()
     )
-    $process = Start-Process -FilePath $Executable -ArgumentList $Arguments -Wait -PassThru -NoNewWindow
+    $process = Start-Process -FilePath $Executable -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
     return $process.ExitCode
 }
 $mainClass = 'io.github.jacek4yang.stegsolver.Launcher'
@@ -78,10 +78,12 @@ foreach ($tool in @('java', 'jlink', 'jpackage', 'mvn')) {
 # java -version writes to stderr, which PowerShell would turn into a terminating error.
 $javaVersion = cmd /c "java -version 2>&1" | Select-Object -First 1
 Write-Host "    $javaVersion"
+if ($javaVersion -notmatch '"21[."]') { throw 'Distribution builds require Java 21' }
 
 Write-Host "==> Cleaning $distDir"
-if (Test-Path $distDir) { Remove-Item -Recurse -Force $distDir }
-New-Item -ItemType Directory -Force -Path $inputDir, $moduleDir, $runtimeDir, $packageDir | Out-Null
+$resolvedDist = [IO.Path]::GetFullPath((Join-Path $projectDir $distDir))
+if ($resolvedDist -ne (Join-Path $projectDir 'target\dist')) { throw 'Unexpected distribution path' }
+if (Test-Path -LiteralPath $resolvedDist) { Remove-Item -LiteralPath $resolvedDist -Recurse -Force }
 
 $testArgs = @()
 if ($SkipTests) { $testArgs += '-DskipTests' }
@@ -89,14 +91,17 @@ if ($SkipTests) { $testArgs += '-DskipTests' }
 Write-Host '==> Building the application jar'
 & mvn -B -ntp @testArgs clean package
 if ($LASTEXITCODE -ne 0) { throw 'The Maven build failed' }
+New-Item -ItemType Directory -Force -Path $inputDir, $moduleDir, $packageDir | Out-Null
 
 Write-Host '==> Collecting the runtime dependencies (ZXing) and the JavaFX modules'
 & mvn -B -ntp -q dependency:copy-dependencies '-DincludeScope=runtime' '-DexcludeGroupIds=org.openjfx' `
     '-DstripVersion=true' "-DoutputDirectory=$inputDir"
+if ($LASTEXITCODE -ne 0) { throw 'Collecting runtime dependencies failed' }
 Copy-Item 'target\stegsolver.jar' $inputDir
 
 & mvn -B -ntp -q dependency:copy-dependencies '-DincludeScope=runtime' '-DincludeGroupIds=org.openjfx' `
     '-DstripVersion=true' "-DoutputDirectory=$moduleDir"
+if ($LASTEXITCODE -ne 0) { throw 'Collecting JavaFX modules failed' }
 # The plain JavaFX artifacts are empty stubs; only the platform ones carry the classes and the native
 # libraries, and having both on the module path makes jlink fail with a duplicate module error.
 Get-ChildItem $moduleDir -Filter '*.jar' | Where-Object { $_.Name -notlike "*-$platform.jar" } |
@@ -138,6 +143,7 @@ if ($LASTEXITCODE -ne 0) { throw 'jpackage failed' }
 
 Write-Host '==> Verifying the packaged application'
 if ($Type -eq 'app-image') {
+    Copy-Item -Path 'LICENSE', 'README.md', 'CHANGELOG.md' -Destination "$packageDir\$appName"
     # --version and --self-test both run without a display, so they work in continuous integration.
     $versionExit = Invoke-PackagedApp -Executable "$packageDir\$appName\$appName.exe" `
         -Arguments @('--version')

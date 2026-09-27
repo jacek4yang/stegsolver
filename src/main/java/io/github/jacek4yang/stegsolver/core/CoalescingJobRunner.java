@@ -8,7 +8,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
  * Runs expensive work off the user interface thread while guaranteeing that only the most recent
@@ -37,6 +36,7 @@ public final class CoalescingJobRunner implements AutoCloseable {
 
     private final Object lock = new Object();
     private Pending<?> pending;
+    private Thread activeThread;
 
     public CoalescingJobRunner(String threadName, Executor deliveryExecutor) {
         ThreadFactory factory = runnable -> {
@@ -58,16 +58,25 @@ public final class CoalescingJobRunner implements AutoCloseable {
      * @param onFailure called on the delivery executor if the newest job throws
      */
     public <T> void submit(String label, Job<T> job, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
-        if (closed.get()) {
-            return;
-        }
-        long id = sequence.incrementAndGet();
-        Pending<T> request = new Pending<>(id, label, job, onSuccess, onFailure);
         synchronized (lock) {
-            pending = request;
+            if (closed.get()) {
+                return;
+            }
+            long id = sequence.incrementAndGet();
+            pending = new Pending<>(id, label, job, onSuccess, onFailure);
+            if (activeThread != null) activeThread.interrupt();
+            if (scheduled.compareAndSet(false, true)) {
+                worker.execute(this::drain);
+            }
         }
-        if (scheduled.compareAndSet(false, true)) {
-            worker.execute(this::drain);
+    }
+
+    /** Invalidates queued work and callbacks without blocking the calling thread. */
+    public void cancel() {
+        synchronized (lock) {
+            sequence.incrementAndGet();
+            pending = null;
+            if (activeThread != null) activeThread.interrupt();
         }
     }
 
@@ -100,28 +109,44 @@ public final class CoalescingJobRunner implements AutoCloseable {
     @SuppressWarnings("unchecked")
     private <T> void run(Pending<T> request) {
         T result;
+        synchronized (lock) {
+            if (!isCurrent(request)) return;
+            activeThread = Thread.currentThread();
+        }
         try {
             result = request.job().run();
         } catch (Exception e) {
             if (isCurrent(request)) {
-                deliveryExecutor.execute(() -> request.onFailure().accept(e));
+                deliveryExecutor.execute(() -> {
+                    if (isCurrent(request)) request.onFailure().accept(e);
+                });
             }
             return;
+        } finally {
+            synchronized (lock) {
+                activeThread = null;
+                Thread.interrupted();
+            }
         }
         if (isCurrent(request)) {
-            deliveryExecutor.execute(() -> request.onSuccess().accept(result));
+            deliveryExecutor.execute(() -> {
+                if (isCurrent(request)) request.onSuccess().accept(result);
+            });
         }
     }
 
     /** True when no newer request has been submitted since {@code request}. */
     private boolean isCurrent(Pending<?> request) {
-        return sequence.get() == request.id();
+        return !closed.get() && sequence.get() == request.id();
     }
 
     @Override
     public void close() {
-        if (closed.compareAndSet(false, true)) {
-            worker.shutdownNow();
+        synchronized (lock) {
+            if (closed.compareAndSet(false, true)) {
+                pending = null;
+                worker.shutdownNow();
+            }
         }
     }
 

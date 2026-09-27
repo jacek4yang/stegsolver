@@ -6,7 +6,6 @@ import io.github.jacek4yang.stegsolver.transform.StereoTransform;
 import io.github.jacek4yang.stegsolver.ui.FxUtils;
 import io.github.jacek4yang.stegsolver.ui.MainWindow;
 import io.github.jacek4yang.stegsolver.ui.ToolPane;
-import java.io.IOException;
 import java.nio.file.Path;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -73,22 +72,36 @@ public final class StereoPane implements ToolPane {
 
     @Override
     public Node content() {
+        Label title = new Label("Stereogram Solver (XOR Shift)");
+        title.getStyleClass().add("steg-card-header");
+
         Label hint = new Label("The solver XORs the image with a copy of itself shifted by the offset. "
                 + "The hidden depth map appears where the shift matches the pattern width. The result is "
-                + "shown in the main view; the open document is not modified.");
+                + "shown in the central view (the open document is not modified).");
         hint.setWrapText(true);
         hint.getStyleClass().add("steg-hint");
 
-        HBox offsetRow = new HBox(6, offsetSpinner, offsetSlider);
-        offsetRow.setAlignment(Pos.CENTER_LEFT);
-        VBox box = new VBox(10,
+        offsetLabel.getStyleClass().addAll("mono", "steg-transform-label");
+
+        HBox offsetNav = new HBox(6, previousButton, offsetSpinner, nextButton, solveButton);
+        offsetNav.setAlignment(Pos.CENTER_LEFT);
+
+        VBox offsetCard = new VBox(8,
+                title,
                 offsetLabel,
-                offsetRow,
-                new HBox(6, previousButton, nextButton, solveButton),
+                offsetSlider,
+                offsetNav,
                 edgeHold,
-                autoSolve,
-                new HBox(6, saveButton, copyButton),
-                hint);
+                autoSolve);
+        offsetCard.getStyleClass().add("steg-card");
+
+        HBox actionRow = new HBox(8, saveButton, copyButton);
+        actionRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox actionCard = new VBox(8, new Label("Export & Save"), actionRow, hint);
+        actionCard.getStyleClass().add("steg-card");
+
+        VBox box = new VBox(10, offsetCard, actionCard);
         box.setPadding(new Insets(10));
         return box;
     }
@@ -173,11 +186,7 @@ public final class StereoPane implements ToolPane {
     }
 
     private void write(Path path) {
-        try {
-            window.status(ImageIoUtil.save(result, path).message(path));
-        } catch (IOException e) {
-            FxUtils.error(window.window(), "Could not save the image", String.valueOf(e), e);
-        }
+        window.saveImage(result, path);
     }
 
     private void copy() {

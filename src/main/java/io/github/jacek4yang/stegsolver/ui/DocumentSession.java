@@ -98,7 +98,11 @@ public final class DocumentSession {
 
     /** Opens a file, replacing the current document. */
     public void open(Path file) throws IOException {
-        ImageData loaded = ImageIoUtil.load(file);
+        acceptLoaded(file, ImageIoUtil.load(file));
+    }
+
+    /** Installs pixels already decoded by the background loader. */
+    public void acceptLoaded(Path file, ImageData loaded) {
         this.path = file;
         this.displayName = file.getFileName().toString();
         this.image = loaded;

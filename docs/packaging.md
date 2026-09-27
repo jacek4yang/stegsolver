@@ -36,9 +36,8 @@ modular: the jars live in the app image's `app` directory and are put on the cla
 is on the class path (the unnamed module) all modules in the image become root modules.
 
 **A separate launcher class.** `Launcher.main` starts `StegSolverApp` through `Application.launch`.
-Starting a class that extends `Application` directly from the class path fails with "JavaFX runtime
-components are missing"; going through a plain class is what makes both `java -jar` and the
-`jpackage` launcher work.
+The plain launcher starts JavaFX using the packaged runtime. The standalone jar is not a fat jar:
+use the source run scripts with dependencies, or the bundled application image.
 
 **Version handling.** `jpackage` accepts only numeric versions, so a development version such as
 `1.0.0-SNAPSHOT` is packaged as `1.0.0`; both scripts derive that automatically and refuse to guess
@@ -62,8 +61,9 @@ target/dist/
         └── runtime/       the bundled runtime image
 ```
 
-Measured on Windows 11 with JDK 21: runtime image 54 MB, application image 56 MB, and no Java
-installation is required on the target machine.
+Archive sizes depend on the platform and JDK patch release. CI packages on Java 21 using
+Temurin; Linux builds use Ubuntu 22.04 for Linux Mint 21/22 compatibility. GTK 3 and X11
+libraries come from the desktop; Java and JavaFX come from the archive.
 
 ## Verifying a packaged build
 

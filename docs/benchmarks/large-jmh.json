@@ -1,0 +1,14 @@
+[
+  {
+    "benchmark": "io.github.jacek4yang.stegsolver.bench.AnalysisBenchmark.extractAllPlanes",
+    "size": "4096",
+    "ms": 371.00590666666665,
+    "allocatedBytes": 67111494.93333334
+  },
+  {
+    "benchmark": "io.github.jacek4yang.stegsolver.bench.AnalysisBenchmark.extractLsb",
+    "size": "4096",
+    "ms": 63.88584375000001,
+    "allocatedBytes": 6292097.7
+  }
+]

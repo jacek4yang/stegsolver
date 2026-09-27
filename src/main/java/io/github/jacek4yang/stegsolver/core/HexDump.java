@@ -46,6 +46,15 @@ public final class HexDump {
         return out.toString();
     }
 
+    /** Streams an entire export without constructing a string proportional to payload size. */
+    public static void write(java.io.Writer writer, byte[] data, boolean includeHex) throws java.io.IOException {
+        for (int offset = 0; offset < data.length; offset += 4096) {
+            if (offset > 0) writer.write('\n');
+            int length = Math.min(4096, data.length - offset);
+            writer.write(format(data, offset, length, length, includeHex));
+        }
+    }
+
     private static void appendLine(StringBuilder out, byte[] data, int start, int count, int address,
             boolean includeHex) {
         out.append(String.format(Locale.ROOT, "%08x  ", address));

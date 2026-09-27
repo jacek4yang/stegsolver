@@ -61,8 +61,10 @@ for those parity tests: `TransformCatalogTest.legacyParityForAllTransforms`,
    now bounds checked and non recursive.
 6. **Hex dumps were unbounded**: a comment block or an appended payload could produce megabytes of
    text. Dumps and previews have explicit limits.
-7. **`getText().getBytes(...)`** was used as the QR payload in `QRcodeDecode`, which corrupts binary
-   payloads. The rewrite uses `BYTE_SEGMENTS` and never reconstructs bytes from text.
+7. **QR saving assumed non-null decoder metadata and an `ArrayList` of `BYTE_SEGMENTS`.**
+   The imported legacy implementation already wrote those segments verbatim, but its unchecked
+   assumptions could crash or create an empty file for text-only symbols. The rewrite preserves
+   exact segment saving, handles missing metadata and keeps text/raw codewords separate.
 8. **A hardcoded `CHARACTER_SET=UTF-8` hint** was passed to ZXing, which mangles the decoded text of
    ISO-8859-1 symbols. The hint is now left unset so ZXing's heuristics apply; the payload bytes are
    unaffected either way because they come from `BYTE_SEGMENTS`.
@@ -71,12 +73,13 @@ for those parity tests: `TransformCatalogTest.legacyParityForAllTransforms`,
 
 ## Barcode and QR handling
 
-The legacy tool decoded a single symbol from a grayscale copy of the image and showed the text, with
-no way to tell binary payloads from text. The rewrite:
+The legacy tool decoded a single symbol from a grayscale copy, displayed text and offered a
+BYTE_SEGMENTS save action without payload classification. The rewrite:
 
 * scans the whole image, a dragged region, or an X11 screen region;
-* finds several symbols in one image and merges QR Structured Append sequences (within one bitmap via
-  ZXing's `QRCodeMultiReader`, across scans via `StructuredAppendMerger`);
+* finds several symbols in one image and preserves individual QR Structured Append headers;
+  explicit merging groups by parity and count, retaining incomplete or conflicting parts across
+  images (up to 256 parts, reset by Clear results);
 * tries `TRY_HARDER`, both polarities, quarter turns, the global histogram binarizer, a rescaled copy
   and pure barcode mode, under a time budget;
 * keeps three representations strictly apart — payload bytes (`BYTE_SEGMENTS`, concatenated verbatim),
@@ -97,3 +100,17 @@ no way to tell binary payloads from text. The rewrite:
 * Preview text is the same layout (offset, hex with a gap after eight bytes, ASCII column), with an
   offset column added.
 * The file analysis report is plain text instead of HTML, and its section names are English.
+
+## Release 1.0.0 comparison
+
+The final audit compared the original menu in `16c2218:src/main/java/team/stinger/StegSolve.java`
+and its Transform, Extract, CombineTransform, StereoTransform, FrameBrowser and FileAnalysis
+implementations against the rewrite. No implemented original analysis tool was removed:
+open/save, zoom, all 42 transforms, extraction with all channel/bit/traversal orders, all 13
+combine modes, stereograms, frame access, PNG/JPEG/GIF/BMP structural analysis and QR decoding
+remain available. Unimplemented legacy TODOs are not counted as capabilities.
+
+The parity oracle covers transform arithmetic (including indexed palettes), extraction, combine
+modes and stereogram offsets. The display integration check additionally cycles every combine
+mode using the same source pair and navigates a generated GIF. Fixed-seed random maps and docked
+tools remain the documented intentional differences above.
