@@ -1,5 +1,6 @@
 package io.github.jacek4yang.stegsolver.core;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,7 +12,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
 import javax.imageio.ImageIO;
-import javax.imageio.ImageWriter;
 
 /**
  * Loading and saving of images through ImageIO, with clear diagnostics and atomic writes.
@@ -52,32 +52,107 @@ public final class ImageIoUtil {
     }
 
     /**
+     * What happened while saving, so that the user interface can explain any lossy conversion.
+     *
+     * @param format    the ImageIO format that was used
+     * @param flattened {@code true} when the alpha channel had to be composited over white
+     */
+    public record SaveOutcome(String format, boolean flattened, long bytes) {
+
+        public String message(Path target) {
+            String base = "Saved " + target.getFileName() + " as " + format + " (" + bytes + " bytes)";
+            return flattened ? base + "; the format cannot store transparency, so transparent pixels were "
+                    + "composited over white" : base;
+        }
+    }
+
+    /**
      * Writes an image, choosing the format from the file extension.
      *
      * <p>The data is first written to a sibling temporary file which is then moved into place, so a
-     * failed write never leaves a truncated image behind.</p>
+     * failed write never leaves a truncated image behind. If the writer of the requested format cannot
+     * represent the image (BMP and JPEG, for example, cannot store an alpha channel) the image is
+     * converted to a supported type — compositing transparency over white — instead of failing.</p>
      */
-    public static void save(ImageData data, Path target) throws IOException {
+    public static SaveOutcome save(ImageData data, Path target) throws IOException {
         if (data == null) {
             throw new IOException("Nothing to save");
         }
         String format = formatForFileName(target);
-        var image = data.toBufferedImage();
+        if (!ImageIO.getImageWritersByFormatName(format).hasNext()) {
+            throw new IOException("No image writer available for format '" + format + "'. Supported formats: "
+                    + String.join(", ", writableExtensions()));
+        }
+        BufferedImage image = data.toBufferedImage();
         Path parent = target.toAbsolutePath().getParent();
         if (parent != null) {
             Files.createDirectories(parent);
         }
         Path temp = Files.createTempFile(parent, ".stegsolver-", "." + format);
+        boolean flattened = false;
         try {
-            boolean written = ImageIO.write(image, format, temp.toFile());
-            if (!written) {
-                throw new IOException("No image writer available for format '" + format + "'");
+            if (!ImageIO.write(image, format, temp.toFile())) {
+                boolean written = false;
+                for (BufferedImage candidate : fallbackRepresentations(image)) {
+                    if (candidate != null && ImageIO.write(candidate, format, temp.toFile())) {
+                        written = true;
+                        flattened = data.hasAlpha() && !supportsAlpha(format);
+                        break;
+                    }
+                }
+                if (!written) {
+                    throw new IOException("The " + format + " writer cannot store this image type ("
+                            + image.getType() + ")");
+                }
             }
             moveIntoPlace(temp, target);
+            return new SaveOutcome(format, flattened, Files.size(target));
         } catch (IOException | RuntimeException e) {
             Files.deleteIfExists(temp);
             throw e;
         }
+    }
+
+    /** Image representations to try when the writer rejects the natural one, best first. */
+    private static List<BufferedImage> fallbackRepresentations(BufferedImage image) {
+        List<BufferedImage> candidates = new ArrayList<>(4);
+        candidates.add(flattenOverWhite(image));
+        if (image.getType() != BufferedImage.TYPE_3BYTE_BGR) {
+            candidates.add(convert(image, BufferedImage.TYPE_3BYTE_BGR));
+        }
+        if (image.getType() != BufferedImage.TYPE_INT_RGB) {
+            candidates.add(convert(image, BufferedImage.TYPE_INT_RGB));
+        }
+        candidates.add(convert(image, BufferedImage.TYPE_BYTE_INDEXED));
+        return candidates;
+    }
+
+    /** Flattens an image over white, which is the conventional treatment for a format without alpha. */
+    public static BufferedImage flattenOverWhite(BufferedImage image) {
+        BufferedImage flattened = new BufferedImage(image.getWidth(), image.getHeight(),
+                BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D graphics = flattened.createGraphics();
+        graphics.setColor(java.awt.Color.WHITE);
+        graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
+        graphics.drawImage(image, 0, 0, null);
+        graphics.dispose();
+        return flattened;
+    }
+
+    private static BufferedImage convert(BufferedImage image, int type) {
+        BufferedImage converted = new BufferedImage(image.getWidth(), image.getHeight(), type);
+        java.awt.Graphics2D graphics = converted.createGraphics();
+        graphics.drawImage(image, 0, 0, null);
+        graphics.dispose();
+        return converted;
+    }
+
+    /** True for the formats StegSolver knows cannot store an alpha channel. */
+    private static boolean supportsAlpha(String format) {
+        return switch (format.toLowerCase(Locale.ROOT)) {
+            case "jpg", "jpeg", "bmp", "wbmp" -> false;
+            default -> true;
+        };
     }
 
     private static void moveIntoPlace(Path temp, Path target) throws IOException {
@@ -107,14 +182,11 @@ public final class ImageIoUtil {
     /** Extensions the user can save to, in a stable order, based on the registered writers. */
     public static List<String> writableExtensions() {
         Set<String> names = new TreeSet<>();
-        for (var iterator = ImageIO.getImageWritersBySuffix(""); iterator.hasNext(); ) {
-            ImageWriter writer = iterator.next();
-            for (String suffix : writer.getOriginatingProvider().getFileSuffixes()) {
-                names.add(switch (suffix.toLowerCase(Locale.ROOT)) {
-                    case "jpeg" -> "jpg";
-                    default -> suffix.toLowerCase(Locale.ROOT);
-                });
-            }
+        for (String name : ImageIO.getWriterFormatNames()) {
+            names.add(switch (name.toLowerCase(Locale.ROOT)) {
+                case "jpeg" -> "jpg";
+                default -> name.toLowerCase(Locale.ROOT);
+            });
         }
         List<String> ordered = new ArrayList<>();
         for (String preferred : List.of("png", "bmp", "jpg", "gif", "tif")) {
