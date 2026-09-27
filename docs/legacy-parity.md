@@ -61,8 +61,10 @@ for those parity tests: `TransformCatalogTest.legacyParityForAllTransforms`,
    now bounds checked and non recursive.
 6. **Hex dumps were unbounded**: a comment block or an appended payload could produce megabytes of
    text. Dumps and previews have explicit limits.
-7. **`getText().getBytes(...)`** was used as the QR payload in `QRcodeDecode`, which corrupts binary
-   payloads. The rewrite uses `BYTE_SEGMENTS` and never reconstructs bytes from text.
+7. **QR saving assumed non-null decoder metadata and an `ArrayList` of `BYTE_SEGMENTS`.**
+   The imported legacy implementation already wrote those segments verbatim, but its unchecked
+   assumptions could crash or create an empty file for text-only symbols. The rewrite preserves
+   exact segment saving, handles missing metadata and keeps text/raw codewords separate.
 8. **A hardcoded `CHARACTER_SET=UTF-8` hint** was passed to ZXing, which mangles the decoded text of
    ISO-8859-1 symbols. The hint is now left unset so ZXing's heuristics apply; the payload bytes are
    unaffected either way because they come from `BYTE_SEGMENTS`.
@@ -71,8 +73,8 @@ for those parity tests: `TransformCatalogTest.legacyParityForAllTransforms`,
 
 ## Barcode and QR handling
 
-The legacy tool decoded a single symbol from a grayscale copy of the image and showed the text, with
-no way to tell binary payloads from text. The rewrite:
+The legacy tool decoded a single symbol from a grayscale copy, displayed text and offered a
+BYTE_SEGMENTS save action without payload classification. The rewrite:
 
 * scans the whole image, a dragged region, or an X11 screen region;
 * finds several symbols in one image and preserves individual QR Structured Append headers;
