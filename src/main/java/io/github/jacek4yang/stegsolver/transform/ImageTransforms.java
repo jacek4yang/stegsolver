@@ -7,11 +7,12 @@ import java.util.Random;
 /**
  * The actual pixel operations of the transform catalog.
  *
- * <p>Every method takes the source pixels and returns a freshly allocated opaque ARGB array, which
- * matches the original StegSolve behaviour of writing the result into an
- * {@link java.awt.image.BufferedImage#TYPE_INT_RGB} image: the alpha channel of the source is
- * deliberately not propagated. The only exception is {@link #original}, which hands back the source
- * array itself.</p>
+ * <p>Every method takes the source pixels and returns a freshly allocated ARGB array in which every
+ * pixel is fully opaque, which is exactly what the original StegSolve produced by writing its result
+ * into an {@link java.awt.image.BufferedImage#TYPE_INT_RGB} image: the alpha channel of the source is
+ * deliberately not propagated, and the result must not be transparent — a bit plane is black and
+ * white, not invisible. The only exception is {@link #original}, which hands back the source array
+ * itself, alpha included.</p>
  *
  * <p>All loops are written over flat arrays with no per pixel object allocation, which is what makes
  * navigation between transforms instantaneous on large images.</p>
@@ -24,6 +25,11 @@ public final class ImageTransforms {
     private ImageTransforms() {
     }
 
+    /** Makes a computed colour opaque, the way the legacy TYPE_INT_RGB output did. */
+    static int opaque(int colour) {
+        return 0xff000000 | (colour & 0xffffff);
+    }
+
     /** The untouched source pixels (not a copy — callers must not modify the result). */
     public static int[] original(ImageData source) {
         return source.pixels();
@@ -34,7 +40,7 @@ public final class ImageTransforms {
         int[] in = source.pixels();
         int[] out = new int[in.length];
         for (int i = 0; i < in.length; i++) {
-            out[i] = (in[i] ^ 0xffffff) & 0xffffff;
+            out[i] = opaque(in[i] ^ 0xffffff);
         }
         return out;
     }
@@ -45,7 +51,7 @@ public final class ImageTransforms {
         int[] out = new int[in.length];
         int shift = channel.shift() + plane;
         for (int i = 0; i < in.length; i++) {
-            out[i] = ((in[i] >>> shift) & 1) != 0 ? 0xffffff : 0;
+            out[i] = ((in[i] >>> shift) & 1) != 0 ? 0xffffffff : 0xff000000;
         }
         return out;
     }
@@ -62,7 +68,7 @@ public final class ImageTransforms {
         int[] in = source.pixels();
         int[] out = new int[in.length];
         for (int i = 0; i < in.length; i++) {
-            out[i] = ((in[i] >>> shift) & 1) != 0 ? 0xffffff : 0;
+            out[i] = ((in[i] >>> shift) & 1) != 0 ? 0xffffffff : 0xff000000;
         }
         return out;
     }
@@ -80,7 +86,7 @@ public final class ImageTransforms {
             if (value > 0xffffff || value < 0) {
                 value >>>= 8;
             }
-            out[i] = value & 0xffffff;
+            out[i] = opaque(value);
         }
         return out;
     }
@@ -94,7 +100,7 @@ public final class ImageTransforms {
             int blue = pixel & 0xff;
             int green = (pixel >>> 8) & 0xff;
             int red = (pixel >>> 16) & 0xff;
-            out[i] = (blue == green && blue == red) ? 0xffffff : 0;
+            out[i] = (blue == green && blue == red) ? 0xffffffff : 0xff000000;
         }
         return out;
     }
@@ -137,7 +143,7 @@ public final class ImageTransforms {
             int red = ((pixel & 0xff0000) >>> 16) * rm;
             red = ((red * rm) ^ rx) + ra;
             int colour = (red << 16) + (green << 8) + blue + (pixel & 0xff000000);
-            out[i] = colour & 0xffffff;
+            out[i] = opaque(colour);
         }
         return out;
     }
@@ -159,7 +165,7 @@ public final class ImageTransforms {
             int red = random.nextInt(256);
             int green = random.nextInt(256);
             int blue = random.nextInt(256);
-            mapped[i] = (red << 16) | (green << 8) | blue;
+            mapped[i] = opaque((red << 16) | (green << 8) | blue);
         }
         int[] out = new int[indices.length];
         for (int i = 0; i < indices.length; i++) {

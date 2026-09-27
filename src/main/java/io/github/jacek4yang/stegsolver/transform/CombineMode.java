@@ -10,9 +10,10 @@ import io.github.jacek4yang.stegsolver.core.ImageData;
  * legacy implementation did. Modes 11 and 12 interlace instead and use the intersection of the two
  * sizes.</p>
  *
- * <p>As in the legacy implementation every mode produces an opaque RGB image: the alpha byte of the
- * inputs is only used where the arithmetic happens to reach into it, and the final result is masked
- * to 24 bits.</p>
+ * <p>As in the legacy implementation every mode produces an opaque image: the alpha byte of the inputs
+ * is only used where the arithmetic happens to reach into it, and the final result is masked to 24
+ * bits and then made fully opaque, exactly like the legacy write into a
+ * {@link java.awt.image.BufferedImage#TYPE_INT_RGB} image.</p>
  */
 public enum CombineMode {
 
@@ -114,8 +115,8 @@ public enum CombineMode {
                 int aRow = y * aw;
                 int bRow = y * bw;
                 for (int x = 0; x < width; x++) {
-                    out[top + x] = a[aRow + x] & 0xffffff;
-                    out[bottom + x] = b[bRow + x] & 0xffffff;
+                    out[top + x] = opaque(a[aRow + x]);
+                    out[bottom + x] = opaque(b[bRow + x]);
                 }
             }
             return ImageData.opaque(width, height * 2, out);
@@ -127,51 +128,56 @@ public enum CombineMode {
             int aRow = y * aw;
             int bRow = y * bw;
             for (int x = 0; x < width; x++) {
-                out[rowStart + x * 2] = a[aRow + x] & 0xffffff;
-                out[rowStart + x * 2 + 1] = b[bRow + x] & 0xffffff;
+                out[rowStart + x * 2] = opaque(a[aRow + x]);
+                out[rowStart + x * 2 + 1] = opaque(b[bRow + x]);
             }
         }
         return ImageData.opaque(width * 2, height, out);
     }
 
+    /** Makes a combined colour opaque, the way the legacy TYPE_INT_RGB output did. */
+    static int opaque(int colour) {
+        return 0xff000000 | (colour & 0xffffff);
+    }
+
     /** The per pixel arithmetic of the non interlace modes. */
     static int combinePixels(CombineMode mode, int color1, int color2) {
         return switch (mode) {
-            case XOR -> (color1 ^ color2) & 0xffffff;
-            case OR -> (color1 | color2) & 0xffffff;
-            case AND -> (color1 & color2) & 0xffffff;
-            case ADD -> (color1 + color2) & 0xffffff;
+            case XOR -> opaque(color1 ^ color2);
+            case OR -> opaque(color1 | color2);
+            case AND -> opaque(color1 & color2);
+            case ADD -> opaque(color1 + color2);
             case ADD_PER_CHANNEL -> {
                 int r = ((color1 & 0xff0000) + (color2 & 0xff0000)) & 0xff0000;
                 int g = ((color1 & 0xff00) + (color2 & 0xff00)) & 0xff00;
                 int b = ((color1 & 0xff) + (color2 & 0xff)) & 0xff;
-                yield (r | g | b) & 0xffffff;
+                yield opaque(r | g | b);
             }
-            case SUBTRACT -> (color1 - color2) & 0xffffff;
+            case SUBTRACT -> opaque(color1 - color2);
             case SUBTRACT_PER_CHANNEL -> {
                 int r = ((color1 & 0xff0000) - (color2 & 0xff0000)) & 0xff0000;
                 int g = ((color1 & 0xff00) - (color2 & 0xff00)) & 0xff00;
                 int b = ((color1 & 0xff) - (color2 & 0xff)) & 0xff;
-                yield (r | g | b) & 0xffffff;
+                yield opaque(r | g | b);
             }
-            case MULTIPLY -> (color1 * color2) & 0xffffff;
+            case MULTIPLY -> opaque(color1 * color2);
             case MULTIPLY_PER_CHANNEL -> {
                 int r = ((((color1 & 0xff0000) >> 16) * ((color2 & 0xff0000) >> 16)) & 0xff) << 16;
                 int g = ((((color1 & 0xff00) >> 8) * ((color2 & 0xff00) >> 8)) & 0xff) << 8;
                 int b = ((color1 & 0xff) * (color2 & 0xff)) & 0xff;
-                yield (r | g | b) & 0xffffff;
+                yield opaque(r | g | b);
             }
             case LIGHTEST -> {
                 int r = (color1 & 0xff0000) > (color2 & 0xff0000) ? (color1 & 0xff0000) : (color2 & 0xff0000);
                 int g = (color1 & 0xff00) > (color2 & 0xff00) ? (color1 & 0xff00) : (color2 & 0xff00);
                 int b = (color1 & 0xff) > (color2 & 0xff) ? (color1 & 0xff) : (color2 & 0xff);
-                yield (r | g | b) & 0xffffff;
+                yield opaque(r | g | b);
             }
             case DARKEST -> {
                 int r = (color1 & 0xff0000) < (color2 & 0xff0000) ? (color1 & 0xff0000) : (color2 & 0xff0000);
                 int g = (color1 & 0xff00) < (color2 & 0xff00) ? (color1 & 0xff00) : (color2 & 0xff00);
                 int b = (color1 & 0xff) < (color2 & 0xff) ? (color1 & 0xff) : (color2 & 0xff);
-                yield (r | g | b) & 0xffffff;
+                yield opaque(r | g | b);
             }
             case INTERLACE_ROWS, INTERLACE_COLUMNS ->
                 throw new IllegalArgumentException(mode + " is not a per pixel mode");

@@ -11,6 +11,13 @@ import java.util.Random;
  * <p>These implementations are used only by tests: they are the oracle that proves the rewritten
  * transforms still produce byte for byte the same result as the tool users already know. Keeping them
  * here — rather than trusting a hand written expectation — is what makes the migration safe.</p>
+ *
+ * <p>The legacy code wrote its results into a {@code TYPE_INT_RGB} image, so the alpha byte of a
+ * computed colour never reached the image. The oracle therefore makes every computed colour opaque
+ * ({@code 0xFF000000 | rgb}), and comparing against it also proves that the rewrite cannot produce
+ * invisible, fully transparent transforms.</p>
+
+ * <p>Where an array is compared, the alpha byte is part of the comparison on purpose.</p>
  */
 public final class LegacyReference {
 
@@ -25,10 +32,10 @@ public final class LegacyReference {
         int[] in = image.pixels();
         int[] out = new int[in.length];
         for (int i = 0; i < in.length; i++) {
-            int colour = 0;
+            int colour = 0xff000000;
             int pixel = in[i];
             if (((pixel >>> bit) & 1) > 0) {
-                colour = 0xffffff;
+                colour = 0xffffffff;
             }
             out[i] = colour;
         }
@@ -44,7 +51,7 @@ public final class LegacyReference {
             if (colour > 0xffffff || colour < 0) {
                 colour >>>= 8;
             }
-            out[i] = colour & 0xffffff;
+            out[i] = 0xff000000 | (colour & 0xffffff);
         }
         return out;
     }
@@ -54,7 +61,7 @@ public final class LegacyReference {
         int[] in = image.pixels();
         int[] out = new int[in.length];
         for (int i = 0; i < in.length; i++) {
-            out[i] = (in[i] ^ 0xffffff) & 0xffffff;
+            out[i] = 0xff000000 | ((in[i] ^ 0xffffff) & 0xffffff);
         }
         return out;
     }
@@ -64,10 +71,10 @@ public final class LegacyReference {
         int[] in = image.pixels();
         int[] out = new int[in.length];
         for (int i = 0; i < in.length; i++) {
-            int colour = 0;
+            int colour = 0xff000000;
             int pixel = in[i];
             if ((pixel & 0xff) == ((pixel & 0xff00) >> 8) && (pixel & 0xff) == ((pixel & 0xff0000) >> 16)) {
-                colour = 0xffffff;
+                colour = 0xffffffff;
             }
             out[i] = colour;
         }
@@ -97,7 +104,7 @@ public final class LegacyReference {
             int r = ((fcol & 0xff0000) >> 16) * rm;
             r = ((r * rm) ^ rx) + ra;
             int col = (r << 16) + (g << 8) + b + (fcol & 0xff000000);
-            out[i] = col & 0xffffff;
+            out[i] = 0xff000000 | (col & 0xffffff);
         }
         return out;
     }
@@ -129,14 +136,18 @@ public final class LegacyReference {
             for (int j = 0; j < height; j++) {
                 int pixel = in[j * width + i];
                 int neighbour = in[j * width + (i + offset) % width];
-                out[j * width + i] = (pixel ^ (neighbour & 0x00ffffff)) & 0xffffff;
+                out[j * width + i] = 0xff000000 | ((pixel ^ (neighbour & 0x00ffffff)) & 0xffffff);
             }
         }
         return out;
     }
 
-    /** Legacy {@code CombineTransform.comb(int, int)}. */
+    /** Legacy {@code CombineTransform.comb(int, int)}, made opaque like the TYPE_INT_RGB output. */
     public static int combinePixels(int mode, int c1, int c2) {
+        return 0xff000000 | (combineColours(mode, c1, c2) & 0xffffff);
+    }
+
+    private static int combineColours(int mode, int c1, int c2) {
         return switch (mode) {
             case 0 -> (c1 ^ c2) & 0xffffff;
             case 1 -> (c1 | c2) & 0xffffff;

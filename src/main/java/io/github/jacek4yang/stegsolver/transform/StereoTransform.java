@@ -9,7 +9,8 @@ import io.github.jacek4yang.stegsolver.core.ImageData;
  * <p>This is the original StegSolve transform: {@code out(x, y) = in(x, y) XOR in((x + offset) mod w, y)}.
  * The pixel is wrapped around the right edge for the last columns, which is what the original did;
  * {@link #withEdgeHold} is provided as an alternative used when wrap around artefacts are
- * distracting.</p>
+ * distracting. Every result pixel is fully opaque, like the legacy TYPE_INT_RGB output: where the
+ * pattern matches, the result is black rather than transparent.</p>
  */
 public final class StereoTransform {
 
@@ -24,17 +25,18 @@ public final class StereoTransform {
         int[] in = source.pixels();
         int[] out = new int[in.length];
         if (shift == 0) {
-            // in XOR in == 0 everywhere
+            // in XOR in == 0 everywhere, i.e. an opaque black image.
+            java.util.Arrays.fill(out, 0xff000000);
             return out;
         }
         for (int y = 0; y < height; y++) {
             int rowStart = y * width;
             int split = width - shift;
             for (int x = 0; x < split; x++) {
-                out[rowStart + x] = (in[rowStart + x] ^ in[rowStart + x + shift]) & 0xffffff;
+                out[rowStart + x] = opaque(in[rowStart + x] ^ in[rowStart + x + shift]);
             }
             for (int x = split; x < width; x++) {
-                out[rowStart + x] = (in[rowStart + x] ^ in[(rowStart + x + shift) - width]) & 0xffffff;
+                out[rowStart + x] = opaque(in[rowStart + x] ^ in[(rowStart + x + shift) - width]);
             }
         }
         return out;
@@ -57,7 +59,7 @@ public final class StereoTransform {
                 if (sampleX >= width) {
                     sampleX = width - 1;
                 }
-                out[rowStart + x] = (in[rowStart + x] ^ in[rowStart + sampleX]) & 0xffffff;
+                out[rowStart + x] = opaque(in[rowStart + x] ^ in[rowStart + sampleX]);
             }
         }
         return out;
@@ -105,6 +107,11 @@ public final class StereoTransform {
             }
         }
         return bestOffset;
+    }
+
+    /** Makes a solved colour opaque, the way the legacy TYPE_INT_RGB output did. */
+    private static int opaque(int colour) {
+        return 0xff000000 | (colour & 0xffffff);
     }
 
     /** Brings an offset into {@code [0, width - 1]}. */

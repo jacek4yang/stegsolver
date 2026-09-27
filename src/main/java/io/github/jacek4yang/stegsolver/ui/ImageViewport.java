@@ -121,6 +121,24 @@ public final class ImageViewport extends Pane {
         return pixels != null;
     }
 
+    /** The node that draws the image, for rendering diagnostics. */
+    public javafx.scene.Node imageViewNode() {
+        return imageView;
+    }
+
+    /** Layout state of the viewport, used by the smoke test and when diagnosing rendering problems. */
+    public String diagnostics() {
+        return "viewport=" + getWidth() + "x" + getHeight()
+                + " content=" + (pixels == null ? "none" : imageWidth + "x" + imageHeight)
+                + " rendered=" + (imageView.getImage() == null ? "none"
+                        : (int) imageView.getImage().getWidth() + "x" + (int) imageView.getImage().getHeight())
+                + " zoom=" + geometry.zoom()
+                + " pan=" + geometry.panX() + "," + geometry.panY()
+                + " imageView=" + imageView.getX() + "," + imageView.getY()
+                + " " + imageView.getFitWidth() + "x" + imageView.getFitHeight()
+                + " visible=" + imageView.isVisible();
+    }
+
     public ViewportGeometry geometry() {
         return geometry;
     }

@@ -21,12 +21,13 @@ class StereoTransformTest {
     }
 
     @Test
-    @DisplayName("an offset of zero produces an all black image")
+    @DisplayName("an offset of zero produces an all black, fully opaque image")
     void zeroOffsetIsBlack() {
         ImageData image = TestImages.randomArgb(8, 4, 1);
         int[] result = StereoTransform.shiftedXor(image, 0);
         for (int pixel : result) {
-            assertEquals(0, pixel);
+            // Black rather than transparent: a fully transparent result would be invisible in the viewer.
+            assertEquals(0xff000000, pixel);
         }
     }
 
@@ -45,12 +46,12 @@ class StereoTransformTest {
         ImageData image = ImageData.opaque(width, height, pixels);
         int[] solved = StereoTransform.shiftedXor(image, 4);
         for (int pixel : solved) {
-            assertEquals(0, pixel);
+            assertEquals(0xff000000, pixel);
         }
         int[] wrongOffset = StereoTransform.shiftedXor(image, 3);
         boolean anyNonZero = false;
         for (int pixel : wrongOffset) {
-            anyNonZero |= pixel != 0;
+            anyNonZero |= (pixel & 0xffffff) != 0;
         }
         assertEquals(true, anyNonZero);
     }

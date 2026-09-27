@@ -80,7 +80,7 @@ class CombineModeTest {
             assertEquals(2, interleaved.width());
             assertEquals(6, interleaved.height());
             for (int y = 0; y < 6; y++) {
-                int expected = y % 2 == 0 ? 0xff0000 : 0x00ff00;
+                int expected = y % 2 == 0 ? 0xffff0000 : 0xff00ff00;
                 for (int x = 0; x < 2; x++) {
                     assertEquals(expected, interleaved.pixelAt(x, y), "at " + x + "," + y);
                 }
@@ -89,7 +89,7 @@ class CombineModeTest {
             assertEquals(4, interleaved.width());
             assertEquals(3, interleaved.height());
             for (int x = 0; x < 4; x++) {
-                int expected = x % 2 == 0 ? 0xff0000 : 0x00ff00;
+                int expected = x % 2 == 0 ? 0xffff0000 : 0xff00ff00;
                 for (int y = 0; y < 3; y++) {
                     assertEquals(expected, interleaved.pixelAt(x, y), "at " + x + "," + y);
                 }
@@ -110,14 +110,18 @@ class CombineModeTest {
     @Test
     @DisplayName("the per channel modes work per channel without carrying into the neighbouring channel")
     void perChannelArithmetic() {
-        assertEquals(0x111213, CombineMode.combinePixels(CombineMode.ADD_PER_CHANNEL, 0x010203, 0x101010));
-        assertEquals(0x010102, CombineMode.combinePixels(CombineMode.SUBTRACT_PER_CHANNEL, 0x110203, 0x100101));
-        assertEquals(0x060608, CombineMode.combinePixels(CombineMode.MULTIPLY_PER_CHANNEL, 0x020304, 0x030202));
-        assertEquals(0x01ff03, CombineMode.combinePixels(CombineMode.LIGHTEST, 0x010203, 0x01ff01));
-        assertEquals(0x010201, CombineMode.combinePixels(CombineMode.DARKEST, 0x010203, 0x01ff01));
+        // Every result is fully opaque, matching the legacy write into a TYPE_INT_RGB image.
+        assertEquals(0xff111213, CombineMode.combinePixels(CombineMode.ADD_PER_CHANNEL, 0x010203, 0x101010));
+        assertEquals(0xff010102,
+                CombineMode.combinePixels(CombineMode.SUBTRACT_PER_CHANNEL, 0x110203, 0x100101));
+        assertEquals(0xff060608,
+                CombineMode.combinePixels(CombineMode.MULTIPLY_PER_CHANNEL, 0x020304, 0x030202));
+        assertEquals(0xff01ff03, CombineMode.combinePixels(CombineMode.LIGHTEST, 0x010203, 0x01ff01));
+        assertEquals(0xff010201, CombineMode.combinePixels(CombineMode.DARKEST, 0x010203, 0x01ff01));
         // The whole pixel modes do carry, which is the documented legacy behaviour.
-        assertEquals(0xffffff, CombineMode.combinePixels(CombineMode.ADD, 0xffff00, 0x0000ff));
-        assertEquals(0x020104, CombineMode.combinePixels(CombineMode.ADD_PER_CHANNEL, 0x010203, 0x01ff01));
+        assertEquals(0xffffffff, CombineMode.combinePixels(CombineMode.ADD, 0xffff00, 0x0000ff));
+        assertEquals(0xff020104,
+                CombineMode.combinePixels(CombineMode.ADD_PER_CHANNEL, 0x010203, 0x01ff01));
     }
 
     @Test
@@ -126,8 +130,15 @@ class CombineModeTest {
         ImageData withAlpha = TestImages.randomArgb(5, 5, 7);
         ImageData combined = CombineMode.XOR.combine(withAlpha, withAlpha);
         for (int pixel : combined.pixels()) {
-            assertEquals(0, pixel & 0xff000000, "pixel " + Integer.toHexString(pixel) + " is not opaque");
+            assertEquals(0xff, pixel >>> 24, "pixel " + Integer.toHexString(pixel) + " is not opaque");
         }
-        assertEquals(0, combined.pixels()[0]);
+        // XORing an image with itself is black, and black must be visible (fully opaque).
+        assertEquals(0xff000000, combined.pixels()[0]);
+
+        // Interlace modes must be opaque as well.
+        ImageData interleaved = CombineMode.INTERLACE_ROWS.combine(withAlpha, withAlpha);
+        for (int pixel : interleaved.pixels()) {
+            assertEquals(0xff, pixel >>> 24, "pixel " + Integer.toHexString(pixel) + " is not opaque");
+        }
     }
 }
