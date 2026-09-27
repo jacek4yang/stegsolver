@@ -33,6 +33,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
@@ -88,6 +89,7 @@ public final class MainWindow implements PreviewHost {
     private final SplitPane split = new SplitPane();
 
     private final Label transformLabel = new Label("No image");
+    private final Label transformStepBadge = new Label("[--/42]");
     private final Label sizeLabel = new Label("-");
     private final Label zoomLabel = new Label("100%");
     private final Label pixelLabel = new Label(" ");
@@ -96,13 +98,21 @@ public final class MainWindow implements PreviewHost {
     private final Label warningBadge = new Label();
     private final Label barcodeBadge = new Label();
     private final Label viewBadge = new Label();
+    private final Label selectionBadge = new Label("ROI: none");
+    private final Region colorSwatch = new Region();
 
-    private final Button previousButton = new Button("\u25C0");
-    private final Button nextButton = new Button("\u25B6");
+    private final HBox transformPill = new HBox(6);
+    private final HBox docInfoPill = new HBox(6);
+    private final HBox zoomPill = new HBox(6);
+    private final HBox pixelInspectorPill = new HBox(6);
+
+    private final Button previousButton = new Button("\u25C0 Prev");
+    private final Button nextButton = new Button("Next \u25B6");
     private final Button backToDocumentButton = new Button("Back to document");
     private final ComboBox<TransformDef> transformChoice = new ComboBox<>();
     private final Slider zoomSlider = new Slider(2, 1000, 100);
-    private final ToggleButton selectionToggle = new ToggleButton("Select region");
+    private final ToggleButton selectionToggle = new ToggleButton("Select ROI");
+    private final ToggleButton dockToggle = new ToggleButton("Tools \u25EB");
     private final CheckMenuItem barcodeOverlayItem = new CheckMenuItem("Show barcode overlay");
     private final CheckMenuItem backgroundScanItem = new CheckMenuItem("Scan new images for barcodes");
 
@@ -148,6 +158,14 @@ public final class MainWindow implements PreviewHost {
         installDragAndDrop();
 
         document.addListener(this::onDocumentChanged);
+        viewport.setContextActions(
+                this::copyDisplayedImage,
+                this::saveDisplayedImage,
+                () -> scanRegion(null, false),
+                () -> scanRegion(viewport.selection(), false),
+                this::nextTransform,
+                this::previousTransform
+        );
         viewport.setOnPixelHover(this::onPixelHoverX, this::onPixelHoverY, this::onPixelExit);
         viewport.setOnSelectionChanged(roi -> {
             selectionToggle.setSelected(roi.isNotEmpty());
@@ -181,7 +199,7 @@ public final class MainWindow implements PreviewHost {
     private void buildLayout() {
         split.setOrientation(Orientation.HORIZONTAL);
         split.getItems().addAll(viewport, toolDock);
-        split.setDividerPositions(0.72);
+        split.setDividerPositions(0.68);
         SplitPane.setResizableWithParent(toolDock, Boolean.FALSE);
 
         toolDock.getStyleClass().add("steg-tool-dock");
@@ -335,19 +353,49 @@ public final class MainWindow implements PreviewHost {
 
     private void buildToolbar() {
         Button openButton = new Button("Open");
+        openButton.setTooltip(new Tooltip("Open an image file (Ctrl+O)"));
         openButton.setOnAction(event -> openImage());
+
         Button saveButton = new Button("Save");
         saveButton.setTooltip(new Tooltip("Save the displayed image (Ctrl+S)"));
         saveButton.setOnAction(event -> saveDisplayedImage());
 
-        previousButton.setTooltip(new Tooltip("Previous transform (Left arrow)"));
+        previousButton.getStyleClass().add("steg-nav-btn");
+        previousButton.setTooltip(new Tooltip("Previous transform plane (Left arrow)"));
         previousButton.setOnAction(event -> previousTransform());
-        nextButton.setTooltip(new Tooltip("Next transform (Right arrow)"));
+
+        nextButton.getStyleClass().add("steg-nav-btn");
+        nextButton.setTooltip(new Tooltip("Next transform plane (Right arrow)"));
         nextButton.setOnAction(event -> nextTransform());
 
+        transformStepBadge.getStyleClass().add("steg-step-badge");
+
         transformChoice.getItems().setAll(TransformCatalog.definitions());
-        transformChoice.setPrefWidth(230);
-        transformChoice.setTooltip(new Tooltip("Current transform; up/down arrows step within a group"));
+        transformChoice.setPrefWidth(260);
+        transformChoice.getStyleClass().add("steg-transform-combo");
+        transformChoice.setTooltip(new Tooltip("Current transform; up/down arrow keys step within a group"));
+        transformChoice.setCellFactory(lv -> new ListCell<>() {
+            @Override
+            protected void updateItem(TransformDef item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(String.format("[%02d/42] %s", item.index() + 1, item.label()));
+                }
+            }
+        });
+        transformChoice.setButtonCell(new ListCell<>() {
+            @Override
+            protected void updateItem(TransformDef item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText("No image");
+                } else {
+                    setText(String.format("[%02d/42] %s", item.index() + 1, item.label()));
+                }
+            }
+        });
         transformChoice.setOnAction(event -> {
             TransformDef selected = transformChoice.getValue();
             if (selected != null && selected.index() != document.transformIndex()) {
@@ -355,7 +403,23 @@ public final class MainWindow implements PreviewHost {
             }
         });
 
-        zoomSlider.setPrefWidth(150);
+        Button restoreButton = new Button("Fit");
+        restoreButton.setTooltip(new Tooltip("Fit image to window (Ctrl+0)"));
+        restoreButton.setOnAction(event -> viewport.fitToWindow());
+
+        Button actualButton = new Button("1:1");
+        actualButton.setTooltip(new Tooltip("Actual pixel size 100% (Ctrl+1)"));
+        actualButton.setOnAction(event -> viewport.actualSize());
+
+        Button zoomOutButton = new Button("\u2212");
+        zoomOutButton.setTooltip(new Tooltip("Zoom out (Ctrl+Minus)"));
+        zoomOutButton.setOnAction(e -> viewport.zoomBy(0.8));
+
+        Button zoomInButton = new Button("+");
+        zoomInButton.setTooltip(new Tooltip("Zoom in (Ctrl+Plus)"));
+        zoomInButton.setOnAction(e -> viewport.zoomBy(1.25));
+
+        zoomSlider.setPrefWidth(120);
         zoomSlider.setBlockIncrement(10);
         zoomSlider.valueProperty().addListener((observable, old, value) -> {
             if (viewport.hasContent() && Math.abs(value.doubleValue() / 100.0 - viewport.zoom()) > 0.0005) {
@@ -364,53 +428,107 @@ public final class MainWindow implements PreviewHost {
             }
         });
 
-        selectionToggle.setTooltip(new Tooltip("Drag inside the image to select a region; Esc clears it"));
+        selectionToggle.setTooltip(new Tooltip("Drag inside image to select a region (Esc to clear, Shift for square)"));
         selectionToggle.setOnAction(event -> {
             viewport.setSelectionMode(selectionToggle.isSelected());
             updateStatusBar();
         });
 
-        Button restoreButton = new Button("Fit");
-        restoreButton.setOnAction(event -> viewport.fitToWindow());
-        Button actualButton = new Button("1:1");
-        actualButton.setOnAction(event -> viewport.actualSize());
-
+        backToDocumentButton.setText("\u21B6 Return to Document");
+        backToDocumentButton.getStyleClass().addAll("steg-badge", "steg-badge-warning");
         backToDocumentButton.setVisible(false);
         backToDocumentButton.setManaged(false);
         backToDocumentButton.setOnAction(event -> showDocument());
 
-        Button themeButton = new Button("Theme");
-        themeButton.setTooltip(new Tooltip("Switch between dark and light"));
+        dockToggle.setSelected(true);
+        dockToggle.setTooltip(new Tooltip("Toggle tools dock visibility (Ctrl+T)"));
+        dockToggle.setOnAction(event -> toggleDock());
+
+        Button themeButton = new Button("Theme \u25D0");
+        themeButton.setTooltip(new Tooltip("Toggle theme between Dark and Light"));
         themeButton.setOnAction(event -> {
             if (themeManager != null) {
                 themeManager.toggle();
             }
         });
 
-        ToolBar toolbar = new ToolBar(openButton, saveButton, new Separator(Orientation.VERTICAL),
-                previousButton, transformChoice, nextButton, new Separator(Orientation.VERTICAL),
-                restoreButton, actualButton, new Label("Zoom"), zoomSlider, new Separator(Orientation.VERTICAL),
-                selectionToggle, backToDocumentButton, new Separator(Orientation.VERTICAL), themeButton);
+        ToolBar toolbar = new ToolBar(
+                openButton, saveButton, new Separator(Orientation.VERTICAL),
+                previousButton, transformStepBadge, transformChoice, nextButton, new Separator(Orientation.VERTICAL),
+                restoreButton, actualButton, zoomOutButton, zoomSlider, zoomInButton, new Separator(Orientation.VERTICAL),
+                selectionToggle, backToDocumentButton, new Separator(Orientation.VERTICAL),
+                dockToggle, themeButton
+        );
         ((VBox) root.getTop()).getChildren().add(toolbar);
     }
 
     private void buildStatusBar() {
         transformLabel.getStyleClass().add("steg-transform-label");
+        transformPill.getChildren().setAll(transformLabel);
+        transformPill.getStyleClass().add("steg-status-pill");
+        transformPill.setAlignment(Pos.CENTER_LEFT);
+
+        viewBadge.getStyleClass().addAll("steg-badge", "steg-badge-warning");
+        viewBadge.setVisible(false);
+        viewBadge.setManaged(false);
+
+        docInfoPill.getChildren().setAll(sizeLabel);
+        docInfoPill.getStyleClass().add("steg-status-pill");
+        docInfoPill.setAlignment(Pos.CENTER_LEFT);
+
+        zoomPill.getChildren().setAll(zoomLabel);
+        zoomPill.getStyleClass().add("steg-status-pill");
+        zoomPill.setAlignment(Pos.CENTER_LEFT);
+        zoomPill.setCursor(javafx.scene.Cursor.HAND);
+        Tooltip.install(zoomPill, new Tooltip("Click to toggle Fit / 100%"));
+        zoomPill.setOnMouseClicked(event -> {
+            if (viewport.hasContent()) {
+                if (Math.abs(viewport.zoom() - 1.0) < 0.05) {
+                    viewport.fitToWindow();
+                } else {
+                    viewport.actualSize();
+                }
+            }
+        });
+
+        selectionBadge.getStyleClass().addAll("steg-status-pill", "mono");
+        selectionBadge.setVisible(false);
+        selectionBadge.setManaged(false);
+
         warningBadge.getStyleClass().addAll("steg-badge", "steg-badge-warning");
         barcodeBadge.getStyleClass().addAll("steg-badge", "steg-badge-payload");
-        viewBadge.getStyleClass().add("steg-badge");
-        for (Label badge : List.of(warningBadge, barcodeBadge, viewBadge)) {
+        for (Label badge : List.of(warningBadge, barcodeBadge)) {
             badge.setVisible(false);
             badge.setManaged(false);
         }
+
+        colorSwatch.getStyleClass().add("steg-color-swatch");
+        colorSwatch.setVisible(false);
+        colorSwatch.setManaged(false);
+
         pixelLabel.getStyleClass().add("mono");
         channelLabel.getStyleClass().add("mono");
         messageLabel.getStyleClass().add("steg-hint");
 
+        pixelInspectorPill.getChildren().setAll(colorSwatch, pixelLabel, channelLabel);
+        pixelInspectorPill.getStyleClass().add("steg-status-pill");
+        pixelInspectorPill.setAlignment(Pos.CENTER_LEFT);
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, transformLabel, viewBadge, sizeLabel, zoomLabel, spacer, messageLabel,
-                warningBadge, barcodeBadge, pixelLabel, channelLabel);
+
+        HBox bar = new HBox(8,
+                transformPill,
+                viewBadge,
+                docInfoPill,
+                zoomPill,
+                selectionBadge,
+                spacer,
+                messageLabel,
+                warningBadge,
+                barcodeBadge,
+                pixelInspectorPill
+        );
         bar.getStyleClass().add("steg-status-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
         root.setBottom(bar);
@@ -539,6 +657,7 @@ public final class MainWindow implements PreviewHost {
         }
         if (!open) {
             viewport.clear();
+            transformStepBadge.setText("[--/42]");
             transformLabel.setText("No image");
             sizeLabel.setText("-");
             warningBadge.setVisible(false);
@@ -546,6 +665,7 @@ public final class MainWindow implements PreviewHost {
             updateStatusBar();
             return;
         }
+        transformStepBadge.setText(String.format("[%02d/42]", document.transformIndex() + 1));
         transformLabel.setText(document.transform().describe());
         sizeLabel.setText(document.image().width() + "x" + document.image().height()
                 + " \u00b7 " + FxUtils.bytes(document.loadedBytes())
@@ -654,19 +774,23 @@ public final class MainWindow implements PreviewHost {
     // =============================================================== paging / view mode
 
     private void toggleDock() {
-        boolean visible = toolDock.isVisible();
-        toolDock.setVisible(!visible);
-        toolDock.setManaged(!visible);
-        if (visible) {
+        setDockVisible(!toolDock.isVisible());
+    }
+
+    private void setDockVisible(boolean visible) {
+        toolDock.setVisible(visible);
+        toolDock.setManaged(visible);
+        dockToggle.setSelected(visible);
+        if (!visible) {
             split.setDividerPositions(1.0);
         } else {
-            split.setDividerPositions(0.72);
+            split.setDividerPositions(0.68);
         }
     }
 
     private void focusPane(ToolPane pane) {
         if (!toolDock.isVisible()) {
-            toggleDock();
+            setDockVisible(true);
         }
         for (int i = 0; i < panes.size(); i++) {
             if (panes.get(i) == pane) {
@@ -843,22 +967,35 @@ public final class MainWindow implements PreviewHost {
         hoveredY = -1;
         pixelLabel.setText(" ");
         channelLabel.setText(" ");
+        colorSwatch.setVisible(false);
+        colorSwatch.setManaged(false);
     }
 
     private void updatePixelLabel() {
         if (hoveredX < 0 || hoveredY < 0 || !viewport.hasContent()) {
             pixelLabel.setText(" ");
             channelLabel.setText(" ");
+            colorSwatch.setVisible(false);
+            colorSwatch.setManaged(false);
             return;
         }
         int viewPixel = viewport.viewPixelAt(hoveredX, hoveredY);
-        pixelLabel.setText("x=" + hoveredX + " y=" + hoveredY + "  view " + FxUtils.argbHex(viewPixel));
+        int a = (viewPixel >>> 24) & 0xFF;
+        int r = (viewPixel >>> 16) & 0xFF;
+        int g = (viewPixel >>> 8) & 0xFF;
+        int b = viewPixel & 0xFF;
+
+        colorSwatch.setStyle(String.format(java.util.Locale.ROOT,
+                "-fx-background-color: rgb(%d,%d,%d); -fx-opacity: %.2f;", r, g, b, a / 255.0));
+        colorSwatch.setVisible(true);
+        colorSwatch.setManaged(true);
+
+        pixelLabel.setText(String.format("(%d, %d) %s", hoveredX, hoveredY, FxUtils.argbHex(viewPixel)));
         if (document.isOpen() && !isShowingPreview()) {
             int original = document.image().argbAt(hoveredX, hoveredY);
-            channelLabel.setText("  source " + FxUtils.argbHex(original) + "  "
-                    + FxUtils.channels(original));
+            channelLabel.setText("src " + FxUtils.argbHex(original) + "  " + FxUtils.channels(original));
         } else {
-            channelLabel.setText("  " + FxUtils.channels(viewPixel));
+            channelLabel.setText(FxUtils.channels(viewPixel));
         }
     }
 
@@ -882,7 +1019,33 @@ public final class MainWindow implements PreviewHost {
         backToDocumentButton.setManaged(preview);
         if (preview) {
             viewBadge.setText("VIEWING " + previewLabel + " (document unchanged)");
+            transformStepBadge.setText("[VIEW]");
+            previousButton.setDisable(true);
+            nextButton.setDisable(true);
+            transformChoice.setDisable(true);
+        } else if (document.isOpen()) {
+            transformStepBadge.setText(String.format("[%02d/42]", document.transformIndex() + 1));
+            previousButton.setDisable(false);
+            nextButton.setDisable(false);
+            transformChoice.setDisable(false);
+        } else {
+            transformStepBadge.setText("[--/42]");
+            previousButton.setDisable(true);
+            nextButton.setDisable(true);
+            transformChoice.setDisable(true);
         }
+
+        Roi sel = viewport.selection();
+        if (sel != null && sel.isNotEmpty()) {
+            selectionBadge.setText(String.format("ROI: %d\u00d7%d @ (%d, %d)", sel.width(), sel.height(), sel.x(), sel.y()));
+            selectionBadge.setVisible(true);
+            selectionBadge.setManaged(true);
+        } else {
+            selectionBadge.setText("ROI: none");
+            selectionBadge.setVisible(false);
+            selectionBadge.setManaged(false);
+        }
+
         infoPane.refresh();
         extractPane.onSelectionChanged(viewport.selection());
     }

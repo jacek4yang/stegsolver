@@ -84,20 +84,37 @@ public final class FrameBrowserPane implements ToolPane {
 
     @Override
     public Node content() {
-        Label hint = new Label("Frames are loaded lazily: only the frames you look at are decoded and kept "
-                + "in memory.");
+        Label hint = new Label("Frames are decoded on demand: only the frames you inspect are kept in memory.");
         hint.setWrapText(true);
         hint.getStyleClass().add("steg-hint");
 
+        status.setWrapText(true);
+        status.getStyleClass().addAll("mono", "steg-transform-label");
+
+        HBox sourceButtons = new HBox(6, useDocumentButton, loadButton);
+        sourceButtons.setAlignment(Pos.CENTER_LEFT);
+
+        VBox sourceCard = new VBox(8,
+                new Label("Frame Source"),
+                sourceButtons,
+                status);
+        sourceCard.getStyleClass().add("steg-card");
+
         HBox navigation = new HBox(6, previousButton, frameSpinner, nextButton);
         navigation.setAlignment(Pos.CENTER_LEFT);
-        VBox box = new VBox(10,
-                new HBox(6, useDocumentButton, loadButton),
-                status,
+
+        HBox frameActions = new HBox(6, saveButton, openAsDocumentButton);
+        frameActions.setAlignment(Pos.CENTER_LEFT);
+
+        VBox navCard = new VBox(8,
+                new Label("Frame Navigation"),
                 navigation,
-                new HBox(6, saveButton, openAsDocumentButton),
+                frameActions,
                 thumbnails,
                 hint);
+        navCard.getStyleClass().add("steg-card");
+
+        VBox box = new VBox(10, sourceCard, navCard);
         box.setPadding(new Insets(10));
         return box;
     }

@@ -68,8 +68,9 @@ public final class InfoPane implements ToolPane {
 
     private static VBox section(String title, Node... children) {
         Label header = new Label(title);
-        header.getStyleClass().add("steg-tool-header");
-        VBox box = new VBox(4);
+        header.getStyleClass().add("steg-card-header");
+        VBox box = new VBox(6);
+        box.getStyleClass().add("steg-card");
         box.getChildren().add(header);
         box.getChildren().addAll(children);
         return box;
@@ -137,13 +138,15 @@ public final class InfoPane implements ToolPane {
             pixelBits.setText(FxUtils.bitPlanes(source));
         }
         selectionLabel.setText(describeSelection(window.selection()));
-        selectionLabel.getStyleClass().setAll("mono");
+        selectionLabel.getStyleClass().setAll("mono", "steg-meta-val");
     }
 
     private static void row(GridPane grid, int row, String label, String value) {
         Label name = new Label(label);
+        name.getStyleClass().add("steg-meta-key");
         name.setMinWidth(110);
         Label text = new Label(value);
+        text.getStyleClass().add("steg-meta-val");
         text.setWrapText(true);
         grid.add(name, 0, row);
         grid.add(text, 1, row);

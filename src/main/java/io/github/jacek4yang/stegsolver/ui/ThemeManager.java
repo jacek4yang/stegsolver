@@ -42,6 +42,8 @@ public final class ThemeManager {
     private Theme theme = Theme.SYSTEM;
     private boolean dark;
 
+    private final java.util.List<java.util.function.Consumer<Boolean>> darkChangeListeners = new java.util.ArrayList<>();
+
     public ThemeManager(Scene scene) {
         this.scene = scene;
     }
@@ -55,13 +57,26 @@ public final class ThemeManager {
         return dark;
     }
 
+    public void addDarkChangeListener(java.util.function.Consumer<Boolean> listener) {
+        darkChangeListeners.add(listener);
+        listener.accept(this.dark);
+    }
+
     /** Applies a theme, resolving {@link Theme#SYSTEM} through the desktop's own preference. */
     public void apply(Theme requested) {
         this.theme = requested;
         boolean useDark = switch (requested) {
             case DARK -> true;
             case LIGHT -> false;
-            case SYSTEM -> systemPrefersDark();
+            case SYSTEM -> {
+                String override = System.getProperty("stegsolver.theme");
+                if ("dark".equalsIgnoreCase(override)) {
+                    yield true;
+                } else if ("light".equalsIgnoreCase(override)) {
+                    yield false;
+                }
+                yield systemPrefersDark();
+            }
         };
         this.dark = useDark;
         scene.getStylesheets().removeIf(stylesheet -> stylesheet.contains("/theme/light.css")
@@ -70,6 +85,9 @@ public final class ThemeManager {
         var resource = ThemeManager.class.getResource(stylesheet);
         if (resource != null) {
             scene.getStylesheets().add(resource.toExternalForm());
+        }
+        for (var listener : darkChangeListeners) {
+            listener.accept(useDark);
         }
     }
 

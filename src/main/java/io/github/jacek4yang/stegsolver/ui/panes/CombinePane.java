@@ -65,23 +65,46 @@ public final class CombinePane implements ToolPane {
 
     @Override
     public Node content() {
-        Button loadButton = new Button("Load second image...");
+        Button loadButton = new Button("Load Second Image...");
         loadButton.setOnAction(event -> loadSecond());
-        Label hint = new Label("The first image is the one currently shown in the main view; the second is "
-                + "loaded here. Combining never changes the open document or its file.");
+
+        Label hint = new Label("The primary image is the one currently shown in the central view; the second image is "
+                + "loaded here. Combining never alters the open document or its file on disk.");
         hint.setWrapText(true);
         hint.getStyleClass().add("steg-hint");
 
+        secondLabel.setWrapText(true);
+        secondLabel.getStyleClass().add("steg-hint");
+
+        HBox secondRow = new HBox(6, loadButton, clearButton);
+        secondRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox secondCard = new VBox(8,
+                new Label("Secondary Image"),
+                secondRow,
+                secondLabel);
+        secondCard.getStyleClass().add("steg-card");
+
+        modeLabel.getStyleClass().addAll("mono", "steg-transform-label");
         HBox modeRow = new HBox(6, previousButton, modeChoice, nextButton);
         modeRow.setAlignment(Pos.CENTER_LEFT);
-        VBox box = new VBox(10,
-                loadButton,
-                secondLabel,
-                clearButton,
+
+        VBox modeCard = new VBox(8,
+                new Label("Combination Mode"),
                 modeLabel,
-                modeRow,
-                new HBox(6, saveButton, copyButton),
+                modeRow);
+        modeCard.getStyleClass().add("steg-card");
+
+        HBox actionRow = new HBox(8, saveButton, copyButton);
+        actionRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox actionCard = new VBox(8,
+                new Label("Export & Save"),
+                actionRow,
                 hint);
+        actionCard.getStyleClass().add("steg-card");
+
+        VBox box = new VBox(10, secondCard, modeCard, actionCard);
         box.setPadding(new Insets(10));
         return box;
     }

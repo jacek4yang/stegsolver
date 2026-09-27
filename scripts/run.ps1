@@ -15,7 +15,8 @@ Set-Location $projectDir
 $smoke = @()
 $files = @()
 foreach ($argument in $Arguments) {
-    if ($argument -eq '--smoke') { $smoke = @('-Dstegsolver.smokeTest=true', '-Dstegsolver.smokeSteps=6') }
+    if ($argument -eq '--smoke') { $smoke += @('-Dstegsolver.smokeTest=true', '-Dstegsolver.smokeSteps=6') }
+    elseif ($argument.StartsWith('-D')) { $smoke += $argument }
     else { $files += $argument }
 }
 

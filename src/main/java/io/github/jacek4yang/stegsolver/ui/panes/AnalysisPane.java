@@ -51,16 +51,31 @@ public final class AnalysisPane implements ToolPane {
 
     @Override
     public Node content() {
-        Button analyseButton = new Button("Analyse file");
+        Button analyseButton = new Button("Analyse File");
         analyseButton.setOnAction(event -> analyse());
-        Button copyButton = new Button("Copy report");
+        Button copyButton = new Button("Copy Report");
         copyButton.setOnAction(event -> FxUtils.copyText(reportArea.getText()));
-        Button saveButton = new Button("Save report...");
+        Button saveButton = new Button("Save Report...");
         saveButton.setOnAction(event -> saveReport());
 
         HBox buttons = new HBox(8, analyseButton, copyButton, saveButton);
-        VBox box = new VBox(8, buttons, warningsLabel, summaryLabel, reportArea);
+        buttons.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+
+        Label header = new Label("Container File Structure");
+        header.getStyleClass().add("steg-card-header");
+
+        summaryLabel.setWrapText(true);
+        summaryLabel.getStyleClass().add("steg-hint");
+
+        VBox topCard = new VBox(8, header, buttons, summaryLabel, warningsLabel);
+        topCard.getStyleClass().add("steg-card");
+
+        VBox reportCard = new VBox(6, new Label("Analysis Report"), reportArea);
+        reportCard.getStyleClass().add("steg-card");
         VBox.setVgrow(reportArea, Priority.ALWAYS);
+        VBox.setVgrow(reportCard, Priority.ALWAYS);
+
+        VBox box = new VBox(10, topCard, reportCard);
         box.setPadding(new Insets(10));
         return box;
     }

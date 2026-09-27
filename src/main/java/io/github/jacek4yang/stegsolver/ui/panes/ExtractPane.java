@@ -106,18 +106,35 @@ public final class ExtractPane implements ToolPane {
 
     @Override
     public Node content() {
-        preview.setPrefHeight(240);
-        VBox box = new VBox(10,
-                new Label("Bit planes to extract"),
+        preview.setPrefHeight(200);
+
+        VBox planesCard = new VBox(8,
+                section("Bit Planes to Extract"),
                 planesGrid,
-                quickSelectionRow(),
-                optionsGrid,
-                new HBox(8, previewButton, saveBinaryButton),
-                new HBox(8, saveTextButton, copyHexButton),
+                quickSelectionRow());
+        planesCard.getStyleClass().add("steg-card");
+
+        VBox optionsCard = new VBox(8,
+                section("Extraction Settings"),
+                optionsGrid);
+        optionsCard.getStyleClass().add("steg-card");
+
+        HBox actionRow = new HBox(8, previewButton, saveBinaryButton, saveTextButton, copyHexButton);
+        actionRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox previewControls = new HBox(8, new Label("Preview"), includeHex, previewLimit);
+        previewControls.setAlignment(Pos.CENTER_LEFT);
+
+        VBox resultsCard = new VBox(8,
+                section("Extracted Data & Preview"),
                 sizeLabel,
                 signatureLabel,
-                new HBox(8, new Label("Preview"), includeHex, previewLimit),
+                actionRow,
+                previewControls,
                 preview);
+        resultsCard.getStyleClass().add("steg-card");
+
+        VBox box = new VBox(10, planesCard, optionsCard, resultsCard);
         box.setPadding(new Insets(10));
         // The dock can be made narrow and short, so the panel scrolls instead of clipping its controls.
         ScrollPane scroll = new ScrollPane(box);
@@ -127,22 +144,39 @@ public final class ExtractPane implements ToolPane {
         return scroll;
     }
 
+    private static Label section(String title) {
+        Label header = new Label(title);
+        header.getStyleClass().add("steg-card-header");
+        return header;
+    }
+
     private GridPane buildPlanesGrid() {
         GridPane grid = new GridPane();
-        grid.setHgap(4);
-        grid.setVgap(3);
+        grid.setHgap(5);
+        grid.setVgap(4);
         grid.add(new Label(""), 0, 0);
-        grid.add(new Label("all"), 1, 0);
+        Label allHeader = new Label("All");
+        allHeader.getStyleClass().add("steg-hint");
+        grid.add(allHeader, 1, 0);
         for (int plane = 7; plane >= 0; plane--) {
-            Label header = new Label(String.valueOf(plane));
-            header.setMinWidth(22);
+            String colText = plane == 7 ? "7 (MSB)" : (plane == 0 ? "0 (LSB)" : String.valueOf(plane));
+            Label header = new Label(colText);
+            header.setMinWidth(plane == 7 || plane == 0 ? 38 : 20);
             header.setAlignment(Pos.CENTER);
+            header.getStyleClass().add("steg-hint");
             grid.add(header, 2 + (7 - plane), 0);
         }
         int row = 1;
         for (Channel channel : Channel.values()) {
             Label name = new Label(channel.label());
-            name.setMinWidth(48);
+            name.setMinWidth(46);
+            String channelClass = switch (channel) {
+                case ALPHA -> "steg-channel-alpha";
+                case RED -> "steg-channel-red";
+                case GREEN -> "steg-channel-green";
+                case BLUE -> "steg-channel-blue";
+            };
+            name.getStyleClass().add(channelClass);
             grid.add(name, 0, row);
             CheckBox all = new CheckBox();
             all.setTooltip(new javafx.scene.control.Tooltip("Select every " + channel.label() + " plane"));
@@ -184,12 +218,18 @@ public final class ExtractPane implements ToolPane {
 
     private Node quickSelectionRow() {
         Button lsb = new Button("RGB LSB");
+        lsb.getStyleClass().add("steg-pill-btn");
         lsb.setTooltip(new javafx.scene.control.Tooltip("Select the least significant bit of red, green "
                 + "and blue, where LSB steganography normally lives"));
         lsb.setOnAction(event -> applySelection(new int[] {1, 0, 2, 0, 3, 0}));
         Button alphaLsb = new Button("Alpha + RGB LSB");
+        alphaLsb.getStyleClass().add("steg-pill-btn");
         alphaLsb.setOnAction(event -> applySelection(new int[] {0, 0, 1, 0, 2, 0, 3, 0}));
+        Button msb = new Button("RGB MSB (7)");
+        msb.getStyleClass().add("steg-pill-btn");
+        msb.setOnAction(event -> applySelection(new int[] {1, 7, 2, 7, 3, 7}));
         Button everything = new Button("All 32");
+        everything.getStyleClass().add("steg-pill-btn");
         everything.setTooltip(new javafx.scene.control.Tooltip("Select all 32 bit planes"));
         everything.setOnAction(event -> {
             for (Channel channel : Channel.values()) {
@@ -201,8 +241,9 @@ public final class ExtractPane implements ToolPane {
             updateSizeLabel();
         });
         Button nothing = new Button("Clear");
+        nothing.getStyleClass().add("steg-pill-btn");
         nothing.setOnAction(event -> applySelection(new int[0]));
-        HBox row = new HBox(6, lsb, alphaLsb, everything, nothing);
+        HBox row = new HBox(5, lsb, alphaLsb, msb, everything, nothing);
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
     }
