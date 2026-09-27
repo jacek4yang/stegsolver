@@ -152,7 +152,7 @@ public final class BarcodePane implements ToolPane {
 
     @Override
     public String title() {
-        return "Barcode / QR";
+        return "Barcode";
     }
 
     @Override

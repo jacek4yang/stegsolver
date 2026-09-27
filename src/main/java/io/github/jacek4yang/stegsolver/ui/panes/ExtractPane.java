@@ -61,10 +61,15 @@ public final class ExtractPane implements ToolPane {
     private final Label signatureLabel = new Label();
     private final TextArea preview = new TextArea();
     private final Button previewButton = new Button("Extract");
-    private final Button saveBinaryButton = new Button("Save binary...");
+    private final Button saveBinaryButton = new Button("Save .bin...");
     private final Button saveTextButton = new Button("Save text...");
     private final Button copyHexButton = new Button("Copy hex");
 
+    /** The bit planes selected when the panel is first shown: the RGB least significant bits. */
+    private static final int[] DEFAULT_SELECTION = {1, 0, 2, 0, 3, 0};
+
+    private final GridPane planesGrid;
+    private final Node optionsGrid;
     private byte[] extracted = new byte[0];
     private ExtractionOptions lastOptions;
     private int extractionSequence;
@@ -86,6 +91,11 @@ public final class ExtractPane implements ToolPane {
         saveBinaryButton.setOnAction(event -> saveBinary());
         saveTextButton.setOnAction(event -> saveText());
         copyHexButton.setOnAction(event -> FxUtils.copyHex(extracted, 32));
+        // The controls have to exist before the default selection can be applied, so the grids are built
+        // here and only assembled into the panel by content().
+        planesGrid = buildPlanesGrid();
+        optionsGrid = buildOptionsGrid();
+        applySelection(DEFAULT_SELECTION);
         updateButtons(false);
     }
 
@@ -96,25 +106,28 @@ public final class ExtractPane implements ToolPane {
 
     @Override
     public Node content() {
+        preview.setPrefHeight(240);
         VBox box = new VBox(10,
                 new Label("Bit planes to extract"),
-                planesGrid(),
+                planesGrid,
                 quickSelectionRow(),
-                optionsGrid(),
-                new HBox(8, previewButton, saveBinaryButton, saveTextButton, copyHexButton),
+                optionsGrid,
+                new HBox(8, previewButton, saveBinaryButton),
+                new HBox(8, saveTextButton, copyHexButton),
                 sizeLabel,
                 signatureLabel,
                 new HBox(8, new Label("Preview"), includeHex, previewLimit),
                 preview);
-        VBox.setVgrow(preview, Priority.ALWAYS);
         box.setPadding(new Insets(10));
+        // The dock can be made narrow and short, so the panel scrolls instead of clipping its controls.
         ScrollPane scroll = new ScrollPane(box);
         scroll.setFitToWidth(true);
         scroll.setPadding(new Insets(0));
-        return box;
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        return scroll;
     }
 
-    private GridPane planesGrid() {
+    private GridPane buildPlanesGrid() {
         GridPane grid = new GridPane();
         grid.setHgap(4);
         grid.setVgap(3);
@@ -170,11 +183,14 @@ public final class ExtractPane implements ToolPane {
     }
 
     private Node quickSelectionRow() {
-        Button lsb = new Button("RGB least significant bits");
+        Button lsb = new Button("RGB LSB");
+        lsb.setTooltip(new javafx.scene.control.Tooltip("Select the least significant bit of red, green "
+                + "and blue, where LSB steganography normally lives"));
         lsb.setOnAction(event -> applySelection(new int[] {1, 0, 2, 0, 3, 0}));
         Button alphaLsb = new Button("Alpha + RGB LSB");
         alphaLsb.setOnAction(event -> applySelection(new int[] {0, 0, 1, 0, 2, 0, 3, 0}));
-        Button everything = new Button("All 32 planes");
+        Button everything = new Button("All 32");
+        everything.setTooltip(new javafx.scene.control.Tooltip("Select all 32 bit planes"));
         everything.setOnAction(event -> {
             for (Channel channel : Channel.values()) {
                 for (int plane = 0; plane < 8; plane++) {
@@ -209,7 +225,7 @@ public final class ExtractPane implements ToolPane {
         updateSizeLabel();
     }
 
-    private Node optionsGrid() {
+    private GridPane buildOptionsGrid() {
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(4);
