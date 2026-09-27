@@ -1,0 +1,90 @@
+/*
+ * Light theme for StegSolver.
+ *
+ * The stylesheet only overrides the looked up colours of the default JavaFX theme, so every control,
+ * including ones created later, follows the theme. `light.css` and `dark.css` must stay in sync.
+ */
+
+.root {
+    -fx-base: #f4f4f4;
+    -fx-background: #ececec;
+    -fx-control-inner-background: #ffffff;
+    -fx-control-inner-background-alt: #f7f7f7;
+    -fx-text-background-color: #1f1f1f;
+    -fx-accent: #2f6fb5;
+    -fx-focus-color: #2f6fb5;
+    -fx-faint-focus-color: #2f6fb522;
+    -fx-selection-bar: #cfe2f6;
+    -fx-selection-bar-non-focused: #e0e0e0;
+    -fx-font-size: 12px;
+}
+
+.steg-viewport {
+    -fx-background-color: #d6d6d6;
+}
+
+.steg-status-bar {
+    -fx-background-color: #e4e4e4;
+    -fx-border-color: #cccccc;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 3 8 3 8;
+    -fx-spacing: 12;
+}
+
+.steg-status-bar .label {
+    -fx-text-fill: #333333;
+}
+
+.steg-badge {
+    -fx-background-color: #d9e6f5;
+    -fx-border-color: #a8c2dd;
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+    -fx-padding: 1 6 1 6;
+    -fx-text-fill: #1c3b5a;
+}
+
+.steg-badge-warning {
+    -fx-background-color: #ffeccc;
+    -fx-border-color: #e0b25c;
+    -fx-text-fill: #5a3d00;
+}
+
+.steg-badge-payload {
+    -fx-background-color: #d8f0d8;
+    -fx-border-color: #8cc08c;
+    -fx-text-fill: #1e3d1e;
+}
+
+.steg-transform-label {
+    -fx-font-weight: bold;
+    -fx-text-fill: #17334f;
+}
+
+.steg-tool-header {
+    -fx-font-weight: bold;
+    -fx-padding: 2 0 2 0;
+}
+
+.steg-hint {
+    -fx-text-fill: #555555;
+    -fx-font-size: 11px;
+}
+
+.mono {
+    -fx-font-family: "Consolas", "DejaVu Sans Mono", "Courier New", monospace;
+    -fx-font-size: 11.5px;
+}
+
+.steg-scan-overlay {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #b0b0b0;
+}
+
+.steg-tool-dock {
+    -fx-background-color: #efefef;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab {
+    -fx-padding: 4 8 4 8;
+}

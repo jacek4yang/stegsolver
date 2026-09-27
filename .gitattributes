@@ -1,0 +1,19 @@
+# Normalise line endings in the repository; check out native line endings on Windows
+# so that the bundled launcher scripts and .bat files keep working.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets are never converted.
+*.png binary
+*.jpg binary
+*.gif binary
+*.bmp binary
+*.jar binary
+*.zip binary
+*.ico binary
+*.icns binary
+
+# Keep diffs of generated/derived things out of review noise.
+target/** linguist-generated=true

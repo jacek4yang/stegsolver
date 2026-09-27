@@ -1,38 +1,54 @@
+# ---- Build output ----
 target/
-!.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+build/
+out/
+*.class
+*.jar
+*.war
+*.ear
+*.jmod
+*.pdb
 
-### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
-*.iws
+# ---- Distribution / packaging output ----
+dist/
+runtime/
+*.msi
+*.exe
+*.deb
+*.rpm
+*.dmg
+*.AppImage
+
+# ---- IDE / editor ----
+.idea/
 *.iml
 *.ipr
-
-### Eclipse ###
-.apt_generated
+*.iws
+.vscode/
+.settings/
+.project
 .classpath
 .factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+nbproject/
+nb-configuration.xml
+*.swp
+*.swo
+*~
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
-.vscode/
-
-### Mac OS ###
+# ---- OS noise ----
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Tooling caches ----
+.mvn/wrapper/maven-wrapper.jar
+.hprof
+jmh-result.json
+*.log
+
+# ---- Secrets: never commit them ----
+*.p12
+*.jks
+*.keystore
+.env
+.env.local
