@@ -55,6 +55,11 @@ jobs:
       - name: Compile the benchmarks
         run: mvn -B -ntp --no-transfer-progress -Pbench test-compile
 
+      - name: Run the engine self test (no display needed)
+        run: |
+          mvn -B -ntp --no-transfer-progress -q dependency:build-classpath             -Dmdep.outputFile=target/cp.txt -Dmdep.includeScope=runtime
+          java -Djava.awt.headless=true -cp "target/classes:$(cat target/cp.txt)"             io.github.jacek4yang.stegsolver.Launcher --self-test
+
       - name: Upload the test reports
         if: always()
         uses: actions/upload-artifact@v4

@@ -36,7 +36,10 @@ jobs:
           echo "The runtime image contains the JavaFX modules."
 
       - name: Verify the packaged launcher starts
-        run: target/dist/packages/StegSolver/bin/StegSolver --version
+        run: |
+          target/dist/packages/StegSolver/bin/StegSolver --version
+          # The self test runs every engine layer through the bundled runtime, without a display.
+          target/dist/packages/StegSolver/bin/StegSolver --self-test
 
       - name: Package the artifact
         run: |
@@ -80,6 +83,9 @@ jobs:
         run: |
           & target\dist\packages\StegSolver\StegSolver.exe --version
           if ($LASTEXITCODE -ne 0) { throw 'The packaged launcher failed' }
+          # The self test runs every engine layer through the bundled runtime.
+          & target\dist\packages\StegSolver\StegSolver.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'The self test failed in the packaged application' }
 
       - name: Package the artifact
         shell: pwsh
